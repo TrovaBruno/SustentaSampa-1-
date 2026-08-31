@@ -1,115 +1,72 @@
-README
-SustentaSampa
-Aplicativo colaborativo de monitoramento de alagamentos urbanos. Usuários reportam
-condições de tráfego e nível de água em suas regiões em poucos toques, e o app
-consolida esses reportes em um mapa de calor em tempo real, com indicadores de
-risco por área, chat da comunidade e probabilidade de alagamento baseada em
-dados meteorológicos e de rios.
-Funcionalidades
-Mapa de calor colaborativo — reportes recentes (últimas 24h) agrupados por
-região, com destaque visual para áreas críticas (10+ reportes).
-Reporte rápido — fluxo de 3 toques (transitabilidade → nível da água →
-enviar), com geocodificação automática por CEP a partir da localização do
-usuário.
-Status de risco do entorno — nível de risco (Baixo/Médio/Alto/Crítico)
-calculado a partir dos reportes num raio de 1 km.
-Probabilidade de alagamento — estimativa por região combinando previsão
-do tempo e vazão de rios próximos (fontes abertas, sem chave de API).
-Chat da comunidade — mensagens em tempo real via Supabase Realtime.
-Gamificação — pontuação por reporte enviado.
-Autenticação — e-mail/senha e login com Google (Supabase Auth).
-Stack técnica
-Camada
-Tecnologia
-Framework
-React 19 + Vite
-Roteamento
-TanStack Router (file-based, SPA)
-Estilo
-Tailwind CSS v4
-Backend
-Supabase (Postgres, Auth, Realtime)
-Mapa
-Leaflet + OpenStreetMap
-Empacotamento
-Capacitor (Android)
-Gerenciador
-Bun
-Projeto 100% independente: sem nenhuma dependência de plataformas de terceiros
-(sem SDKs proprietários, sem intermediação de auth) — apenas bibliotecas
-públicas de código aberto e a API do Supabase.
-O package-lock.json está versionado para travar as versões exatas das
-dependências. Se for usar Bun no lugar do npm, apague-o e rode bun install
-para gerar um bun.lock (não misture os dois lockfiles no repositório).
-Estrutura do projeto
-src/
-├── components/
-│   └── AppShell.tsx             # guarda de autenticação, navegação, cabeçalho
-├── integrations/supabase/
-│   ├── client.ts                 # cliente Supabase
-│   └── types.ts                  # tipos gerados a partir do schema
-├── lib/
-│   ├── cep.ts                     # geocodificação reversa por CEP
-│   ├── weather.ts                  # clima e nível de rios (Open-Meteo)
-│   ├── floodguard-geo.ts            # cálculo de risco e distâncias
-│   └── floodguard-clusters.ts        # agrupamento de reportes em clusters
-├── routes/
-│   ├── __root.tsx                     # layout raiz, 404 e tratamento de erro
-│   ├── index.tsx                       # mapa + reporte rápido + gamificação
-│   ├── auth.tsx                         # login e cadastro
-│   ├── chat.tsx                          # chat da comunidade
-│   └── probabilidade.tsx                  # probabilidade de alagamento
-├── main.tsx                        # bootstrap do React Router
-└── styles.css                       # design system (tema escuro de alto contraste)
+# 🌧️ SustentaSampa
 
-supabase/migrations/                 # schema do banco (referência)
-​
-Como rodar localmente
-Pré-requisitos
-Node.js 20+ (ou Bun, como alternativa mais rápida)
-Uma conta Supabase própria
-Instalação
-npm install
-cp .env.example .env
-​
-Preencha o .env com as credenciais do seu projeto Supabase (Settings → API):
-VITE_SUPABASE_URL="https://SEU_PROJETO.supabase.co"
-VITE_SUPABASE_PUBLISHABLE_KEY="sb_publishable_..."
-​
-Banco de dados
-No SQL Editor do seu projeto Supabase, execute o conteúdo de
-supabase/migrations/0001_schema.sql. Isso cria as tabelas profiles,
-flood_reports e chat_messages, as políticas de RLS, os triggers de
-pontuação e habilita o Realtime para o chat.
-Para login com Google, configure o provedor em Authentication → Providers →
-Google no painel do Supabase, usando credenciais OAuth do
-Google Cloud Console e a callback URL
-exibida na própria tela do Supabase.
-Executar
-npm run dev
-​
-Acesse http://localhost:5173.
-Scripts disponíveis
-Comando
-Descrição
-npm run dev
-Servidor de desenvolvimento com hot reload
-npm run build
-Checagem de tipos + build de produção em dist/
-npm run preview
-Serve o build de produção localmente
-npm run lint
-ESLint
-npm run format
-Prettier
-Use bun run <script> no lugar de npm run <script> se preferir o Bun.
-Empacotamento para Android (Capacitor)
-npm run build
-npm install @capacitor/core @capacitor/android
-npm install -D @capacitor/cli
-npx cap add android
-npx cap sync android
-npx cap open android
-​
-O capacitor.config.ts já aponta para dist/, empacotando os assets
-estáticos diretamente no APK.
+> **Plataforma colaborativa para monitoramento e prevenção de alagamentos urbanos em tempo real.**
+
+![React 19](https://img.shields.io/badge/React-19-61DAFB?style=for-the-badge&logo=react&logoColor=black)
+![Vite](https://img.shields.io/badge/Vite-6.0-646CFF?style=for-the-badge&logo=vite&logoColor=white)
+![Tailwind CSS](https://img.shields.io/badge/Tailwind_CSS-v4-38B2AC?style=for-the-badge&logo=tailwind-css&logoColor=white)
+![Supabase](https://img.shields.io/badge/Supabase-Postgres_|_Auth_|_Realtime-3FCF8E?style=for-the-badge&logo=supabase&logoColor=white)
+![Capacitor](https://img.shields.io/badge/Capacitor-Android-1192E8?style=for-the-badge&logo=capacitor&logoColor=white)
+
+---
+
+## 📌 Sobre o Projeto
+
+O **SustentaSampa** permite que os próprios cidadãos informem as condições de tráfego e o nível da água em suas regiões com poucos cliques. O aplicativo consolida esses dados em um mapa interativo e oferece indicadores de risco, probabilidade hidrológica e um canal de comunicação direta entre os moradores.
+
+> 💡 **Projeto 100% Independente:** Construído sem SDKs proprietários ou intermediários de autenticação. Utiliza exclusivamente APIs abertas e a infraestrutura open-source do Supabase.
+
+---
+
+## ✨ Funcionalidades Principais
+
+* 🗺️ **Mapa de Calor Colaborativo:** Visualização geográfica dos registros das últimas 24 horas, destacando em vermelho áreas críticas (com 10+ reportes).
+* ⚡ **Reporte Rápido em 3 Toques:** Fluxo otimizado *(Transitabilidade → Nível da água → Enviar)* com geocodificação automática por CEP baseada na localização.
+* 🛡️ **Indicador de Risco do Entorno:** Cálculo de nível de risco (*Baixo, Médio, Alto ou Crítico*) considerando os alertas registrados num raio de 1 km.
+* 📊 **Probabilidade de Alagamento:** Estimativa por região combinando previsão do tempo e dados de vazão de rios próximos via fontes públicas (Open-Meteo).
+* 💬 **Chat da Comunidade:** Canal de mensagens instantâneas alimentado por **Supabase Realtime**.
+* 🏆 **Gamificação:** Sistema de pontuação acumulativa a cada reporte enviado para incentivar a colaboração.
+* 🔐 **Autenticação Integrada:** Suporte a e-mail/senha e login social com Google.
+
+---
+
+## 🛠️ Stack Técnica
+
+| Camada | Tecnologia | Descrição |
+| :--- | :--- | :--- |
+| **Frontend** | React 19 + Vite | Interface reativa e build de alta performance |
+| **Roteamento** | TanStack Router | Roteamento baseado em arquivos para SPAs |
+| **Estilização** | Tailwind CSS v4 | Design system responsivo e tema escuro |
+| **Backend & Banco** | Supabase | PostgreSQL, Auth, Realtime e Row Level Security |
+| **Mapas** | Leaflet + OpenStreetMap | Renderização e manipulação de mapas interativos |
+| **Mobile** | Capacitor | Empacotamento nativo para Android |
+| **Gerenciador** | npm / Bun | Gerenciamento de dependências |
+
+---
+
+## 📂 Estrutura de Arquivos
+
+```text
+sustentasampa/
+├── src/
+│   ├── components/
+│   │   └── AppShell.tsx            # Navegação, cabeçalho e guarda de autenticação
+│   ├── integrations/supabase/
+│   │   ├── client.ts               # Instância do cliente Supabase
+│   │   └── types.ts                # Tipos TypeScript do banco de dados
+│   ├── lib/
+│   │   ├── cep.ts                  # Geocodificação reversa por CEP
+│   │   ├── weather.ts              # Consulta a APIs de clima e rios (Open-Meteo)
+│   │   ├── floodguard-geo.ts       # Cálculos de distância e níveis de risco
+│   │   └── floodguard-clusters.ts  # Agrupamento visual de reportes no mapa
+│   ├── routes/
+│   │   ├── __root.tsx              # Layout base, tela 404 e tratamento de erros
+│   │   ├── index.tsx               # Mapa principal, reporte rápido e pontos
+│   │   ├── auth.tsx                # Tela de Login e Cadastro
+│   │   ├── chat.tsx                # Chat comunitário em tempo real
+│   │   └── probabilidade.tsx       # Painel de probabilidade de alagamento
+│   ├── main.tsx                    # Bootstrap da aplicação
+│   └── styles.css                  # Tema escuro de alto contraste
+└── supabase/
+    └── migrations/
+        └── 0001_schema.sql         # Schema completo do banco de dados
