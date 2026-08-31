@@ -34,9 +34,11 @@ export type Database = {
         Row: {
           cep: string | null;
           created_at: string;
+          hidden_at: string | null;
           id: string;
           lat: number;
           lng: number;
+          photo_url: string;
           trafficability: string;
           user_id: string;
           water_level: string;
@@ -45,9 +47,11 @@ export type Database = {
         Insert: {
           cep?: string | null;
           created_at?: string;
+          hidden_at?: string | null;
           id?: string;
           lat: number;
           lng: number;
+          photo_url: string;
           trafficability: string;
           user_id: string;
           water_level: string;
@@ -56,9 +60,11 @@ export type Database = {
         Update: {
           cep?: string | null;
           created_at?: string;
+          hidden_at?: string | null;
           id?: string;
           lat?: number;
           lng?: number;
+          photo_url?: string;
           trafficability?: string;
           user_id?: string;
           water_level?: string;
@@ -71,6 +77,7 @@ export type Database = {
           created_at: string;
           display_name: string;
           id: string;
+          is_admin: boolean;
           points: number;
           reports_count: number;
         };
@@ -78,6 +85,7 @@ export type Database = {
           created_at?: string;
           display_name?: string;
           id: string;
+          is_admin?: boolean;
           points?: number;
           reports_count?: number;
         };
@@ -85,6 +93,7 @@ export type Database = {
           created_at?: string;
           display_name?: string;
           id?: string;
+          is_admin?: boolean;
           points?: number;
           reports_count?: number;
         };

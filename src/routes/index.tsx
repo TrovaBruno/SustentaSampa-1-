@@ -28,6 +28,33 @@ const RISK_TOKEN: Record<RiskLevel, string> = {
   "Crítico": "risk-critical",
 };
 
+/** Redimensiona e comprime a foto no navegador antes do upload (economiza dados). */
+async function compressPhoto(file: File, maxDim = 1280, quality = 0.75): Promise<Blob> {
+  const objectUrl = URL.createObjectURL(file);
+  try {
+    const img = await new Promise<HTMLImageElement>((resolve, reject) => {
+      const el = new Image();
+      el.onload = () => resolve(el);
+      el.onerror = () => reject(new Error("Não foi possível ler a imagem"));
+      el.src = objectUrl;
+    });
+    const scale = Math.min(1, maxDim / Math.max(img.width, img.height));
+    const canvas = document.createElement("canvas");
+    canvas.width = Math.round(img.width * scale);
+    canvas.height = Math.round(img.height * scale);
+    const ctx = canvas.getContext("2d");
+    if (!ctx) throw new Error("Canvas indisponível");
+    ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+    const blob = await new Promise<Blob | null>((resolve) =>
+      canvas.toBlob(resolve, "image/jpeg", quality),
+    );
+    if (!blob) throw new Error("Falha ao comprimir a imagem");
+    return blob;
+  } finally {
+    URL.revokeObjectURL(objectUrl);
+  }
+}
+
 function loadLeaflet(): Promise<any> {
   const w = window as any;
   if (w.__leafletReady) return w.__leafletReady;
@@ -64,16 +91,25 @@ function SustentaSampa({ userId }: { userId: string }) {
   const [step, setStep] = useState(1);
   const [traffic, setTraffic] = useState<Trafficability | null>(null);
   const [water, setWater] = useState<WaterLevel | null>(null);
-  const [profile, setProfile] = useState<{ display_name: string; points: number } | null>(null);
+  const [profile, setProfile] = useState<{
+    display_name: string;
+    points: number;
+    is_admin: boolean;
+  } | null>(null);
   const [toast, setToast] = useState<string | null>(null);
   const [sending, setSending] = useState(false);
   const [cepInfo, setCepInfo] = useState<CepLocation | null>(null);
   const [cepLoading, setCepLoading] = useState(false);
+  const [photoFile, setPhotoFile] = useState<File | null>(null);
+  const [photoPreview, setPhotoPreview] = useState<string | null>(null);
+  const [photoError, setPhotoError] = useState<string | null>(null);
+  const [adminBusy, setAdminBusy] = useState(false);
 
   const refresh = useCallback(async () => {
     const { data } = await supabase
       .from("flood_reports")
-      .select("lat,lng,weight,created_at,cep")
+      .select("lat,lng,weight,created_at,cep,photo_url")
+      .is("hidden_at", null)
       .gte("created_at", since24hISO())
       .order("created_at", { ascending: false })
       .limit(2000);
@@ -98,7 +134,11 @@ function SustentaSampa({ userId }: { userId: string }) {
           .bindPopup(
             `<b>${c.count} reporte(s)</b> nas últimas 24h<br/>${
               c.cep ? `CEP ${c.cep}<br/>` : ""
-            }${c.critical ? "Região crítica (10+ reportes)" : "Região em atenção"}`,
+            }${c.critical ? "Região crítica (10+ reportes)" : "Região em atenção"}${
+              c.photoUrl
+                ? `<br/><img src="${c.photoUrl}" alt="Foto do reporte mais recente" style="width:100%;max-width:220px;border-radius:8px;margin-top:6px" />`
+                : ""
+            }`,
           )
           .addTo(group);
       }
@@ -111,7 +151,7 @@ function SustentaSampa({ userId }: { userId: string }) {
   const loadProfile = useCallback(async () => {
     const { data } = await supabase
       .from("profiles")
-      .select("display_name,points")
+      .select("display_name,points,is_admin")
       .eq("id", userId)
       .maybeSingle();
     if (data) setProfile(data);
@@ -163,29 +203,93 @@ function SustentaSampa({ userId }: { userId: string }) {
     };
   }, [refresh, loadProfile]);
 
-  async function submitReport() {
-    if (!traffic || !water) return;
-    setSending(true);
-    const { error } = await supabase.from("flood_reports").insert({
-      user_id: userId,
-      lat: cepInfo?.lat ?? coords.lat,
-      lng: cepInfo?.lng ?? coords.lng,
-      cep: cepInfo?.cep ?? null,
-      trafficability: traffic,
-      water_level: water,
-      weight: computeWeight(traffic, water),
+  function resetReportForm() {
+    setStep(1);
+    setTraffic(null);
+    setWater(null);
+    setPhotoFile(null);
+    setPhotoPreview((prev) => {
+      if (prev) URL.revokeObjectURL(prev);
+      return null;
     });
+    setPhotoError(null);
+  }
 
-    setSending(false);
-    if (error) {
-      setToast("Não foi possível enviar o reporte.");
-    } else {
+  function onPhotoSelected(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file) return;
+    if (!file.type.startsWith("image/")) {
+      setPhotoError("Selecione um arquivo de imagem.");
+      return;
+    }
+    setPhotoError(null);
+    setPhotoFile(file);
+    setPhotoPreview((prev) => {
+      if (prev) URL.revokeObjectURL(prev);
+      return URL.createObjectURL(file);
+    });
+  }
+
+  async function submitReport() {
+    if (!traffic || !water || !photoFile) {
+      setPhotoError("A foto é obrigatória para enviar o reporte.");
+      return;
+    }
+    setSending(true);
+    try {
+      const compressed = await compressPhoto(photoFile);
+      const path = `${userId}/${crypto.randomUUID()}.jpg`;
+      const { error: uploadError } = await supabase.storage
+        .from("flood-reports")
+        .upload(path, compressed, { contentType: "image/jpeg", upsert: false });
+      if (uploadError) throw uploadError;
+
+      const {
+        data: { publicUrl },
+      } = supabase.storage.from("flood-reports").getPublicUrl(path);
+
+      const { error } = await supabase.from("flood_reports").insert({
+        user_id: userId,
+        lat: cepInfo?.lat ?? coords.lat,
+        lng: cepInfo?.lng ?? coords.lng,
+        cep: cepInfo?.cep ?? null,
+        trafficability: traffic,
+        water_level: water,
+        weight: computeWeight(traffic, water),
+        photo_url: publicUrl,
+      });
+      if (error) throw error;
+
       setToast("Reporte enviado! +10 pontos");
       setModal(false);
-      setStep(1);
-      setTraffic(null);
-      setWater(null);
+      resetReportForm();
       await Promise.all([refresh(), loadProfile()]);
+    } catch {
+      setToast("Não foi possível enviar o reporte. Tente novamente.");
+    } finally {
+      setSending(false);
+    }
+    setTimeout(() => setToast(null), 3500);
+  }
+
+  async function clearAllReportsFromMap() {
+    if (!profile?.is_admin) return;
+    const confirmed = window.confirm(
+      "Isso vai esconder TODOS os reportes do mapa, para todos os usuários. Os dados continuam salvos no banco. Confirmar?",
+    );
+    if (!confirmed) return;
+    setAdminBusy(true);
+    const { error } = await supabase
+      .from("flood_reports")
+      .update({ hidden_at: new Date().toISOString() })
+      .is("hidden_at", null);
+    setAdminBusy(false);
+    if (error) {
+      setToast("Não foi possível limpar os reportes.");
+    } else {
+      setToast("Reportes escondidos do mapa (continuam salvos no banco).");
+      await refresh();
     }
     setTimeout(() => setToast(null), 3500);
   }
@@ -236,6 +340,17 @@ function SustentaSampa({ userId }: { userId: string }) {
             {emergency ? "Modo Emergência ATIVO" : "Ativar Modo Emergência / Chuva Forte"}
           </button>
 
+          {profile?.is_admin && (
+            <button
+              type="button"
+              onClick={clearAllReportsFromMap}
+              disabled={adminBusy}
+              className="min-h-[48px] w-full rounded-2xl border-4 border-danger text-sm font-black uppercase tracking-wide text-danger disabled:opacity-60"
+            >
+              {adminBusy ? "Limpando..." : "🛡️ Admin: limpar reportes do mapa"}
+            </button>
+          )}
+
           <div className="relative overflow-hidden rounded-2xl border-4 border-border">
             <div ref={mapEl} className="h-[52vh] min-h-[320px] w-full" />
           </div>
@@ -282,7 +397,10 @@ function SustentaSampa({ userId }: { userId: string }) {
                 <h2 className="text-xl font-black text-accent">Reporte Rápido</h2>
                 <button
                   type="button"
-                  onClick={() => setModal(false)}
+                  onClick={() => {
+                    setModal(false);
+                    resetReportForm();
+                  }}
                   className="min-h-[44px] px-3 text-base font-bold text-muted-foreground"
                 >
                   Fechar
@@ -343,7 +461,58 @@ function SustentaSampa({ userId }: { userId: string }) {
 
               {step === 3 && (
                 <div className="space-y-3">
-                  <p className="text-base font-semibold">3. Confirmar e enviar</p>
+                  <p className="text-base font-semibold">3. Foto do local (obrigatória)</p>
+                  <p className="text-sm text-muted-foreground">
+                    A foto ajuda a comunidade a confirmar o reporte. Tire uma foto do
+                    alagamento ou envie uma da galeria.
+                  </p>
+
+                  <div className="grid grid-cols-2 gap-2">
+                    <label
+                      htmlFor="report-photo-camera"
+                      className="flex min-h-[56px] w-full cursor-pointer items-center justify-center rounded-2xl border-4 border-dashed border-border px-2 text-center text-base font-bold text-muted-foreground data-[has=true]:border-accent data-[has=true]:text-accent"
+                      data-has={!!photoFile}
+                    >
+                      📷 Tirar foto
+                    </label>
+                    <label
+                      htmlFor="report-photo-gallery"
+                      className="flex min-h-[56px] w-full cursor-pointer items-center justify-center rounded-2xl border-4 border-dashed border-border px-2 text-center text-base font-bold text-muted-foreground data-[has=true]:border-accent data-[has=true]:text-accent"
+                      data-has={!!photoFile}
+                    >
+                      🖼️ Da galeria
+                    </label>
+                  </div>
+                  {/* capture="environment" força a câmera a abrir direto no Android;
+                      o input sem capture abre o seletor de arquivos/galeria normal. */}
+                  <input
+                    id="report-photo-camera"
+                    type="file"
+                    accept="image/*"
+                    capture="environment"
+                    onChange={onPhotoSelected}
+                    className="sr-only"
+                  />
+                  <input
+                    id="report-photo-gallery"
+                    type="file"
+                    accept="image/*"
+                    onChange={onPhotoSelected}
+                    className="sr-only"
+                  />
+
+                  {photoPreview && (
+                    <img
+                      src={photoPreview}
+                      alt="Pré-visualização da foto do reporte"
+                      className="max-h-56 w-full rounded-2xl border-4 border-border object-cover"
+                    />
+                  )}
+
+                  {photoError && (
+                    <p className="text-sm font-bold text-danger">{photoError}</p>
+                  )}
+
                   <p className="text-sm text-muted-foreground">
                     {cepLoading
                       ? "Detectando o CEP da sua localização..."
@@ -354,7 +523,7 @@ function SustentaSampa({ userId }: { userId: string }) {
 
                   <button
                     type="button"
-                    disabled={sending}
+                    disabled={sending || !photoFile}
                     onClick={submitReport}
                     className="min-h-[56px] w-full rounded-2xl bg-accent text-lg font-black uppercase text-background disabled:opacity-60"
                   >
