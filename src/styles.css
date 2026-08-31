@@ -1,0 +1,107 @@
+@import "tailwindcss";
+
+@custom-variant dark (&:is(.dark *));
+
+/*
+ * Definição do design system.
+ *
+ * O bloco @theme inline mapeia variáveis CSS para classes utilitárias do
+ * Tailwind (ex: --color-primary -> bg-primary, text-primary).
+ *
+ * Os blocos :root e .dark definem os valores reais das cores em oklch.
+ */
+
+@theme inline {
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+  --radius-2xl: calc(var(--radius) + 8px);
+  --radius-3xl: calc(var(--radius) + 12px);
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-danger: var(--danger);
+  --color-risk-low: var(--risk-low);
+  --color-risk-mid: var(--risk-mid);
+  --color-risk-high: var(--risk-high);
+  --color-risk-critical: var(--risk-critical);
+}
+
+:root {
+  --radius: 0.875rem;
+  /* SustentaSampa — tema escuro de alto contraste */
+  --background: oklch(0.18 0 0);
+  --foreground: oklch(1 0 0);
+  --card: oklch(0.24 0 0);
+  --card-foreground: oklch(1 0 0);
+  --primary: oklch(0.88 0.17 95);
+  --primary-foreground: oklch(0.18 0 0);
+  --secondary: oklch(0.3 0 0);
+  --secondary-foreground: oklch(1 0 0);
+  --muted: oklch(0.3 0 0);
+  --muted-foreground: oklch(0.8 0 0);
+  --accent: oklch(0.88 0.17 95);
+  --accent-foreground: oklch(0.18 0 0);
+  --destructive: oklch(0.55 0.22 27);
+  --destructive-foreground: oklch(1 0 0);
+  --danger: oklch(0.5 0.2 27);
+  --border: oklch(0.38 0 0);
+  --input: oklch(0.38 0 0);
+  --ring: oklch(0.88 0.17 95);
+  --risk-low: oklch(0.75 0.18 145);
+  --risk-mid: oklch(0.88 0.17 95);
+  --risk-high: oklch(0.72 0.19 45);
+  --risk-critical: oklch(0.62 0.26 25);
+}
+
+@layer base {
+  * {
+    border-color: var(--color-border);
+  }
+
+  body {
+    background-color: var(--color-background);
+    color: var(--color-foreground);
+  }
+}
+
+.emergency {
+  filter: saturate(1.35) contrast(1.12);
+}
+
+/* Regiões com 10+ reportes: vermelho piscando */
+@keyframes cluster-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.15; }
+}
+
+.cluster-critical {
+  animation: cluster-pulse 1s ease-in-out infinite;
+}
+
+.legend-blink {
+  animation: cluster-pulse 1s ease-in-out infinite;
+}
+
+/* Visual escuro para os tiles do OSM (que não têm chave de API) */
+.leaflet-tile {
+  filter: grayscale(1) invert(1) brightness(0.85) contrast(0.9);
+}
+.leaflet-container {
+  background: #121212;
+}
