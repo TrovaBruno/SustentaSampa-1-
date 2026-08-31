@@ -1,0 +1,8 @@
+node_modules
+dist
+android
+ios
+package-lock.json
+bun.lock
+pnpm-lock.yaml
+src/routeTree.gen.ts

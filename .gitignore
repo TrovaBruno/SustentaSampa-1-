@@ -1,0 +1,21 @@
+node_modules
+dist
+dist-ssr
+*.local
+
+# gerado automaticamente pelo @tanstack/router-plugin
+src/routeTree.gen.ts
+
+# gerado pelo Capacitor (fase 2) — só entra no git depois que você rodar `cap add android`
+android
+ios
+
+# segredos
+.env
+.env.local
+
+# editor / SO
+.vscode/*
+!.vscode/extensions.json
+.idea
+.DS_Store
