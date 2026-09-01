@@ -59,7 +59,15 @@ export function BottomNav() {
   );
 }
 
-export function PageHeader({ title, subtitle }: { title: string; subtitle?: string }) {
+export function PageHeader({
+  title,
+  subtitle,
+  actions,
+}: {
+  title: string;
+  subtitle?: string;
+  actions?: ReactNode;
+}) {
   const navigate = useNavigate();
   async function signOut() {
     await supabase.auth.signOut();
@@ -71,13 +79,16 @@ export function PageHeader({ title, subtitle }: { title: string; subtitle?: stri
         <h1 className="text-2xl font-black tracking-tight text-accent">{title}</h1>
         {subtitle && <p className="text-sm text-muted-foreground">{subtitle}</p>}
       </div>
-      <button
-        type="button"
-        onClick={signOut}
-        className="min-h-[48px] rounded-xl border-2 border-border px-4 text-sm font-bold text-muted-foreground"
-      >
-        Sair
-      </button>
+      <div className="flex items-center gap-2">
+        {actions}
+        <button
+          type="button"
+          onClick={signOut}
+          className="min-h-[48px] rounded-xl border-2 border-border px-4 text-sm font-bold text-muted-foreground"
+        >
+          Sair
+        </button>
+      </div>
     </header>
   );
 }
