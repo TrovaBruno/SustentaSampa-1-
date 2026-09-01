@@ -25,6 +25,7 @@ function ChatPage({ userId }: { userId: string }) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [text, setText] = useState("");
   const [name, setName] = useState("Nome");
+  const [isAdmin, setIsAdmin] = useState(false);
   const [sending, setSending] = useState(false);
   const listRef = useRef<HTMLDivElement | null>(null);
 
@@ -37,10 +38,13 @@ function ChatPage({ userId }: { userId: string }) {
   useEffect(() => {
     supabase
       .from("profiles")
-      .select("display_name")
+      .select("display_name,is_admin")
       .eq("id", userId)
       .maybeSingle()
-      .then(({ data }) => data?.display_name && setName(data.display_name));
+      .then(({ data }) => {
+        if (data?.display_name) setName(data.display_name);
+        setIsAdmin(!!data?.is_admin);
+      });
 
     supabase
       .from("chat_messages")
@@ -66,6 +70,14 @@ function ChatPage({ userId }: { userId: string }) {
           scrollDown();
         },
       )
+      .on(
+        "postgres_changes",
+        { event: "DELETE", schema: "public", table: "chat_messages" },
+        (payload) => {
+          const deletedId = (payload.old as { id: string }).id;
+          setMessages((prev) => prev.filter((m) => m.id !== deletedId));
+        },
+      )
       .subscribe();
 
     return () => {
@@ -88,6 +100,17 @@ function ChatPage({ userId }: { userId: string }) {
     }
   }
 
+  async function deleteMessage(id: string) {
+    if (!isAdmin) return;
+    const confirmed = window.confirm("Apagar esta mensagem para todos os usuários?");
+    if (!confirmed) return;
+    const { error } = await supabase.from("chat_messages").delete().eq("id", id);
+    if (!error) {
+      // Remove localmente também — a atualização via realtime pode levar um instante.
+      setMessages((prev) => prev.filter((m) => m.id !== id));
+    }
+  }
+
   return (
     <Page>
       <PageHeader title="Chat da Comunidade" subtitle={`Você aparece como ${name}`} />
@@ -106,7 +129,7 @@ function ChatPage({ userId }: { userId: string }) {
           return (
             <div key={m.id} className={mine ? "text-right" : "text-left"}>
               <div
-                className={`inline-block max-w-[85%] rounded-2xl border-2 px-4 py-2 text-left ${
+                className={`group relative inline-block max-w-[85%] rounded-2xl border-2 px-4 py-2 text-left ${
                   mine ? "border-accent bg-accent/10" : "border-border bg-background"
                 }`}
               >
@@ -120,6 +143,18 @@ function ChatPage({ userId }: { userId: string }) {
                     minute: "2-digit",
                   })}
                 </p>
+
+                {isAdmin && (
+                  <button
+                    type="button"
+                    onClick={() => deleteMessage(m.id)}
+                    aria-label="Apagar mensagem (admin)"
+                    title="Apagar mensagem (admin)"
+                    className="absolute -top-2 -right-2 flex h-7 w-7 items-center justify-center rounded-full border-2 border-danger bg-background text-xs text-danger"
+                  >
+                    🗑️
+                  </button>
+                )}
               </div>
             </div>
           );
