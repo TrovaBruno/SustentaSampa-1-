@@ -106,6 +106,11 @@ function SustentaSampa({ userId }: { userId: string }) {
   const [adminBusy, setAdminBusy] = useState(false);
   const [sosOpen, setSosOpen] = useState(false);
   const [sosCopied, setSosCopied] = useState(false);
+  const emergencyRef = useRef(false);
+
+  useEffect(() => {
+    emergencyRef.current = emergency;
+  }, [emergency]);
 
   const refresh = useCallback(async () => {
     const { data } = await supabase
@@ -147,7 +152,8 @@ function SustentaSampa({ userId }: { userId: string }) {
       group.addTo(mapRef.current);
       layerRef.current = group;
     }
-    setRisk(riskFromPoints(coordsRef.current.lat, coordsRef.current.lng, points));
+    const radiusKm = emergencyRef.current ? 2.5 : 1;
+    setRisk(riskFromPoints(coordsRef.current.lat, coordsRef.current.lng, points, radiusKm));
   }, []);
 
   const loadProfile = useCallback(async () => {
@@ -198,12 +204,19 @@ function SustentaSampa({ userId }: { userId: string }) {
         );
       }
     });
-    const timer = setInterval(refresh, 60_000);
     return () => {
       cancelled = true;
-      clearInterval(timer);
     };
   }, [refresh, loadProfile]);
+
+  // Atualização periódica do mapa: a cada 60s no normal, a cada 15s no
+  // modo emergência (chuva forte muda o cenário rápido demais pra esperar).
+  useEffect(() => {
+    const intervalMs = emergency ? 15_000 : 60_000;
+    refresh();
+    const timer = setInterval(refresh, intervalMs);
+    return () => clearInterval(timer);
+  }, [emergency, refresh]);
 
   function resetReportForm() {
     setStep(1);
@@ -349,7 +362,7 @@ function SustentaSampa({ userId }: { userId: string }) {
             aria-live="polite"
           >
             <p className="text-sm font-semibold uppercase tracking-widest text-muted-foreground">
-              Status do Entorno (raio 1 km · últimas 24h)
+              Status do Entorno (raio {emergency ? "2,5" : "1"} km · últimas 24h)
             </p>
             <p
               className="mt-1 text-4xl font-black leading-none"
