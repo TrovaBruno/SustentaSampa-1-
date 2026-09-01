@@ -104,6 +104,8 @@ function SustentaSampa({ userId }: { userId: string }) {
   const [photoPreview, setPhotoPreview] = useState<string | null>(null);
   const [photoError, setPhotoError] = useState<string | null>(null);
   const [adminBusy, setAdminBusy] = useState(false);
+  const [sosOpen, setSosOpen] = useState(false);
+  const [sosCopied, setSosCopied] = useState(false);
 
   const refresh = useCallback(async () => {
     const { data } = await supabase
@@ -294,6 +296,33 @@ function SustentaSampa({ userId }: { userId: string }) {
     setTimeout(() => setToast(null), 3500);
   }
 
+  function locationText() {
+    const lat = (cepInfo?.lat ?? coords.lat).toFixed(5);
+    const lng = (cepInfo?.lng ?? coords.lng).toFixed(5);
+    const cepPart = cepInfo?.cep ? ` · CEP ${cepInfo.cep}` : "";
+    const labelPart = cepInfo?.label ? ` · ${cepInfo.label}` : "";
+    return `Minha localização: ${lat}, ${lng}${cepPart}${labelPart} — https://www.google.com/maps?q=${lat},${lng}`;
+  }
+
+  async function openSOS() {
+    setSosOpen(true);
+    setSosCopied(false);
+    try {
+      await navigator.clipboard.writeText(locationText());
+      setSosCopied(true);
+    } catch {
+      setSosCopied(false);
+    }
+  }
+
+  function smsHref(body: string) {
+    // iOS exige "&" antes de "body", Android exige "?". Sem número de
+    // destino: o app de mensagens do usuário abre o seletor de contato.
+    const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
+    const sep = isIOS ? "&" : "?";
+    return `sms:${sep}body=${encodeURIComponent(body)}`;
+  }
+
   const riskToken = risk ? RISK_TOKEN[risk.level] : "risk-low";
 
   return (
@@ -302,6 +331,15 @@ function SustentaSampa({ userId }: { userId: string }) {
         <PageHeader
           title="SustentaSampa"
           subtitle={`${profile?.display_name ?? "Nome"} · ${profile?.points ?? 0} pts`}
+          actions={
+            <button
+              type="button"
+              onClick={openSOS}
+              className="min-h-[48px] rounded-xl bg-danger px-4 text-sm font-black uppercase text-foreground"
+            >
+              🆘 SOS
+            </button>
+          }
         />
 
         <div className="space-y-3 px-4">
@@ -387,6 +425,72 @@ function SustentaSampa({ userId }: { userId: string }) {
         {toast && (
           <div className="fixed bottom-44 left-1/2 z-[1700] w-[90%] max-w-sm -translate-x-1/2 rounded-xl border-2 border-accent bg-card p-4 text-center text-base font-bold text-accent">
             {toast}
+          </div>
+        )}
+
+        {sosOpen && (
+          <div className="fixed inset-0 z-[1800] flex items-end justify-center bg-black/80 p-3">
+            <div className="w-full max-w-md rounded-3xl border-4 border-danger bg-card p-5">
+              <div className="mb-4 flex items-center justify-between">
+                <h2 className="text-xl font-black text-danger">Emergência</h2>
+                <button
+                  type="button"
+                  onClick={() => setSosOpen(false)}
+                  className="min-h-[44px] px-3 text-base font-bold text-muted-foreground"
+                >
+                  Fechar
+                </button>
+              </div>
+
+              <p className="text-sm text-muted-foreground">
+                {sosCopied
+                  ? "Sua localização foi copiada — cole no chat ou SMS ao pedir ajuda."
+                  : "Não foi possível copiar a localização automaticamente. Copie manualmente abaixo."}
+              </p>
+
+              <div className="mt-2 flex items-center gap-2 rounded-xl border-2 border-border bg-background p-3">
+                <p className="flex-1 truncate text-xs text-muted-foreground">{locationText()}</p>
+                <button
+                  type="button"
+                  onClick={async () => {
+                    try {
+                      await navigator.clipboard.writeText(locationText());
+                      setSosCopied(true);
+                    } catch {
+                      setSosCopied(false);
+                    }
+                  }}
+                  className="min-h-[36px] rounded-lg border-2 border-border px-3 text-xs font-bold text-foreground"
+                >
+                  Copiar
+                </button>
+              </div>
+
+              <div className="mt-4 space-y-3">
+                <a
+                  href="tel:199"
+                  className="flex min-h-[64px] w-full items-center justify-center rounded-2xl bg-danger text-lg font-black uppercase text-foreground"
+                >
+                  📞 Defesa Civil · 199
+                </a>
+                <a
+                  href="tel:193"
+                  className="flex min-h-[64px] w-full items-center justify-center rounded-2xl bg-danger text-lg font-black uppercase text-foreground"
+                >
+                  🚒 Bombeiros · 193
+                </a>
+                <p className="pt-1 text-xs text-muted-foreground">
+                  Defesa Civil e Bombeiros atendem só por ligação. Pra avisar um contato de
+                  confiança por mensagem:
+                </p>
+                <a
+                  href={smsHref(locationText())}
+                  className="flex min-h-[64px] w-full items-center justify-center rounded-2xl border-4 border-danger text-lg font-black uppercase text-danger"
+                >
+                  ✉️ Enviar localização por SMS
+                </a>
+              </div>
+            </div>
           </div>
         )}
 
