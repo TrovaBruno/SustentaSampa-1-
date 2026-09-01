@@ -74,6 +74,7 @@ export type Database = {
       };
       profiles: {
         Row: {
+          avatar_color: string;
           created_at: string;
           display_name: string;
           id: string;
@@ -82,6 +83,7 @@ export type Database = {
           reports_count: number;
         };
         Insert: {
+          avatar_color?: string;
           created_at?: string;
           display_name?: string;
           id: string;
@@ -90,6 +92,7 @@ export type Database = {
           reports_count?: number;
         };
         Update: {
+          avatar_color?: string;
           created_at?: string;
           display_name?: string;
           id?: string;

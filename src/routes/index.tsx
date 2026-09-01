@@ -16,6 +16,7 @@ import {
   type WaterLevel,
 } from "@/lib/floodguard-geo";
 import { resolveCepFromCoords, type CepLocation } from "@/lib/cep";
+import { AVATAR_CATALOG, avatarColorFor, isAvatarUnlocked } from "@/lib/avatars";
 
 export const Route = createFileRoute("/")({
   component: SustentaSampaGate,
@@ -95,6 +96,7 @@ function SustentaSampa({ userId }: { userId: string }) {
     display_name: string;
     points: number;
     is_admin: boolean;
+    avatar_color: string;
   } | null>(null);
   const [toast, setToast] = useState<string | null>(null);
   const [sending, setSending] = useState(false);
@@ -106,6 +108,8 @@ function SustentaSampa({ userId }: { userId: string }) {
   const [adminBusy, setAdminBusy] = useState(false);
   const [sosOpen, setSosOpen] = useState(false);
   const [sosCopied, setSosCopied] = useState(false);
+  const [avatarShopOpen, setAvatarShopOpen] = useState(false);
+  const [avatarSaving, setAvatarSaving] = useState(false);
   const emergencyRef = useRef(false);
 
   useEffect(() => {
@@ -159,7 +163,7 @@ function SustentaSampa({ userId }: { userId: string }) {
   const loadProfile = useCallback(async () => {
     const { data } = await supabase
       .from("profiles")
-      .select("display_name,points,is_admin")
+      .select("display_name,points,is_admin,avatar_color")
       .eq("id", userId)
       .maybeSingle();
     if (data) setProfile(data);
@@ -336,6 +340,22 @@ function SustentaSampa({ userId }: { userId: string }) {
     return `sms:${sep}body=${encodeURIComponent(body)}`;
   }
 
+  async function selectAvatar(id: string) {
+    const option = AVATAR_CATALOG.find((a) => a.id === id);
+    if (!option || !profile || !isAvatarUnlocked(option, profile.points)) return;
+    setAvatarSaving(true);
+    const { error } = await supabase
+      .from("profiles")
+      .update({ avatar_color: id })
+      .eq("id", userId);
+    setAvatarSaving(false);
+    if (!error) {
+      setProfile((p) => (p ? { ...p, avatar_color: id } : p));
+      setToast("Avatar atualizado!");
+      setTimeout(() => setToast(null), 2500);
+    }
+  }
+
   const riskToken = risk ? RISK_TOKEN[risk.level] : "risk-low";
 
   return (
@@ -344,6 +364,17 @@ function SustentaSampa({ userId }: { userId: string }) {
         <PageHeader
           title="SustentaSampa"
           subtitle={`${profile?.display_name ?? "Nome"} · ${profile?.points ?? 0} pts`}
+          avatar={
+            <button
+              type="button"
+              onClick={() => setAvatarShopOpen(true)}
+              aria-label="Personalizar avatar"
+              className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full border-4 border-border text-lg font-black text-background"
+              style={{ backgroundColor: avatarColorFor(profile?.avatar_color ?? "default") }}
+            >
+              {(profile?.display_name ?? "?").trim().charAt(0).toUpperCase()}
+            </button>
+          }
           actions={
             <button
               type="button"
@@ -502,6 +533,60 @@ function SustentaSampa({ userId }: { userId: string }) {
                 >
                   ✉️ Enviar localização por SMS
                 </a>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {avatarShopOpen && (
+          <div className="fixed inset-0 z-[1800] flex items-end justify-center bg-black/80 p-3">
+            <div className="w-full max-w-md rounded-3xl border-4 border-accent bg-card p-5">
+              <div className="mb-4 flex items-center justify-between">
+                <h2 className="text-xl font-black text-accent">Personalizar avatar</h2>
+                <button
+                  type="button"
+                  onClick={() => setAvatarShopOpen(false)}
+                  className="min-h-[44px] px-3 text-base font-bold text-muted-foreground"
+                >
+                  Fechar
+                </button>
+              </div>
+
+              <p className="text-sm text-muted-foreground">
+                Cores desbloqueadas conforme você acumula pontos reportando alagamentos. Você
+                tem {profile?.points ?? 0} pts.
+              </p>
+
+              <div className="mt-4 grid grid-cols-2 gap-3">
+                {AVATAR_CATALOG.map((option) => {
+                  const unlocked = isAvatarUnlocked(option, profile?.points ?? 0);
+                  const selected = profile?.avatar_color === option.id;
+                  return (
+                    <button
+                      key={option.id}
+                      type="button"
+                      disabled={!unlocked || avatarSaving}
+                      onClick={() => selectAvatar(option.id)}
+                      className="flex flex-col items-center gap-2 rounded-2xl border-4 border-border p-3 text-center data-[selected=true]:border-accent disabled:opacity-40"
+                      data-selected={selected}
+                    >
+                      <span
+                        className="flex h-14 w-14 items-center justify-center rounded-full text-xl font-black text-background"
+                        style={{ backgroundColor: option.color }}
+                      >
+                        {unlocked ? "" : "🔒"}
+                      </span>
+                      <span className="text-sm font-bold text-foreground">{option.label}</span>
+                      <span className="text-xs text-muted-foreground">
+                        {unlocked
+                          ? selected
+                            ? "Selecionado"
+                            : "Desbloqueado"
+                          : `Faltam ${option.threshold - (profile?.points ?? 0)} pts`}
+                      </span>
+                    </button>
+                  );
+                })}
               </div>
             </div>
           </div>

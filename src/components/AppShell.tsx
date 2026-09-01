@@ -63,10 +63,12 @@ export function PageHeader({
   title,
   subtitle,
   actions,
+  avatar,
 }: {
   title: string;
   subtitle?: string;
   actions?: ReactNode;
+  avatar?: ReactNode;
 }) {
   const navigate = useNavigate();
   async function signOut() {
@@ -75,9 +77,12 @@ export function PageHeader({
   }
   return (
     <header className="flex items-center justify-between gap-3 bg-background/95 p-4 backdrop-blur">
-      <div>
-        <h1 className="text-2xl font-black tracking-tight text-accent">{title}</h1>
-        {subtitle && <p className="text-sm text-muted-foreground">{subtitle}</p>}
+      <div className="flex items-center gap-3">
+        {avatar}
+        <div>
+          <h1 className="text-2xl font-black tracking-tight text-accent">{title}</h1>
+          {subtitle && <p className="text-sm text-muted-foreground">{subtitle}</p>}
+        </div>
       </div>
       <div className="flex items-center gap-2">
         {actions}
