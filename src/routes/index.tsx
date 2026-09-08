@@ -284,8 +284,13 @@ function SustentaSampa({ userId }: { userId: string }) {
       setModal(false);
       resetReportForm();
       await Promise.all([refresh(), loadProfile()]);
-    } catch {
-      setToast("Não foi possível enviar o reporte. Tente novamente.");
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "";
+      setToast(
+        message.includes("RATE_LIMIT_EXCEEDED")
+          ? "Você já enviou 3 reportes na última hora. Aguarde um pouco antes de enviar outro."
+          : "Não foi possível enviar o reporte. Tente novamente.",
+      );
     } finally {
       setSending(false);
     }
