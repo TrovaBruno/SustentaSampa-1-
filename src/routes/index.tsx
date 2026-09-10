@@ -7,6 +7,7 @@ import {
   since24hISO,
   CRITICAL_CLUSTER_COUNT,
   type ReportPoint,
+  type Cluster,
 } from "@/lib/floodguard-clusters";
 import {
   computeWeight,
@@ -28,6 +29,26 @@ const RISK_TOKEN: Record<RiskLevel, string> = {
   Alto: "risk-high",
   "Crítico": "risk-critical",
 };
+
+const TRAFFIC_LABEL: Record<string, string> = {
+  transitavel: "Transitável",
+  veiculos_altos: "Apenas veículos altos",
+  intransitavel: "Intransitável",
+};
+
+const WATER_LABEL: Record<string, string> = {
+  canela: "Canela",
+  joelho: "Joelho",
+  acima_capo: "Acima do capô",
+};
+
+function timeAgo(iso: string): string {
+  const diffMin = Math.max(0, Math.round((Date.now() - new Date(iso).getTime()) / 60000));
+  if (diffMin < 1) return "agora mesmo";
+  if (diffMin < 60) return `há ${diffMin} min`;
+  const diffH = Math.round(diffMin / 60);
+  return `há ${diffH}h`;
+}
 
 /** Redimensiona e comprime a foto no navegador antes do upload (economiza dados). */
 async function compressPhoto(file: File, maxDim = 1280, quality = 0.75): Promise<Blob> {
@@ -110,6 +131,8 @@ function SustentaSampa({ userId }: { userId: string }) {
   const [sosCopied, setSosCopied] = useState(false);
   const [avatarShopOpen, setAvatarShopOpen] = useState(false);
   const [avatarSaving, setAvatarSaving] = useState(false);
+  const clustersRef = useRef<Cluster[]>([]);
+  const [selectedCluster, setSelectedCluster] = useState<Cluster | null>(null);
   const emergencyRef = useRef(false);
 
   useEffect(() => {
@@ -119,7 +142,7 @@ function SustentaSampa({ userId }: { userId: string }) {
   const refresh = useCallback(async () => {
     const { data } = await supabase
       .from("flood_reports")
-      .select("lat,lng,weight,created_at,cep,photo_url")
+      .select("id,lat,lng,weight,created_at,cep,photo_url,trafficability,water_level")
       .is("hidden_at", null)
       .gte("created_at", since24hISO())
       .order("created_at", { ascending: false })
@@ -127,6 +150,8 @@ function SustentaSampa({ userId }: { userId: string }) {
     const points = (data ?? []) as ReportPoint[];
     const clusters = clusterReports(points);
     setHotspots(clusters.filter((c) => c.critical).length);
+    clustersRef.current = clusters;
+    setSelectedCluster((prev) => (prev ? (clusters.find((c) => c.key === prev.key) ?? null) : prev));
 
     const L = (window as any).L;
     if (L && mapRef.current) {
@@ -142,15 +167,7 @@ function SustentaSampa({ userId }: { userId: string }) {
           fillOpacity: c.critical ? 0.45 : 0.3,
           className: c.critical ? "cluster-critical" : "cluster-warning",
         })
-          .bindPopup(
-            `<b>${c.count} reporte(s)</b> nas últimas 24h<br/>${
-              c.cep ? `CEP ${c.cep}<br/>` : ""
-            }${c.critical ? "Região crítica (10+ reportes)" : "Região em atenção"}${
-              c.photoUrl
-                ? `<br/><img src="${c.photoUrl}" alt="Foto do reporte mais recente" style="width:100%;max-width:220px;border-radius:8px;margin-top:6px" />`
-                : ""
-            }`,
-          )
+          .on("click", () => setSelectedCluster(c))
           .addTo(group);
       }
       group.addTo(mapRef.current);
@@ -592,6 +609,56 @@ function SustentaSampa({ userId }: { userId: string }) {
                     </button>
                   );
                 })}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {selectedCluster && (
+          <div className="fixed inset-0 z-[1800] flex items-end justify-center bg-black/80 p-3">
+            <div className="flex max-h-[85vh] w-full max-w-md flex-col rounded-3xl border-4 border-accent bg-card p-5">
+              <div className="mb-2 flex items-center justify-between">
+                <div>
+                  <h2 className="text-xl font-black text-accent">
+                    {selectedCluster.count} reporte(s) nesta região
+                  </h2>
+                  <p className="text-sm text-muted-foreground">
+                    {selectedCluster.cep ? `CEP ${selectedCluster.cep} · ` : ""}
+                    {selectedCluster.critical ? "Região crítica" : "Região em atenção"}
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setSelectedCluster(null)}
+                  className="min-h-[44px] px-3 text-base font-bold text-muted-foreground"
+                >
+                  Fechar
+                </button>
+              </div>
+
+              <div className="mt-2 flex-1 space-y-3 overflow-y-auto pr-1">
+                {selectedCluster.reports.map((r) => (
+                  <div key={r.id} className="rounded-2xl border-2 border-border p-3">
+                    {r.photo_url && (
+                      <img
+                        src={r.photo_url}
+                        alt="Foto do reporte"
+                        className="mb-2 max-h-48 w-full rounded-xl object-cover"
+                      />
+                    )}
+                    <div className="flex flex-wrap items-center gap-2 text-sm font-bold">
+                      <span className="rounded-lg border-2 border-border px-2 py-0.5">
+                        {(r.trafficability && TRAFFIC_LABEL[r.trafficability]) ?? "—"}
+                      </span>
+                      <span className="rounded-lg border-2 border-border px-2 py-0.5">
+                        Água: {(r.water_level && WATER_LABEL[r.water_level]) ?? "—"}
+                      </span>
+                      <span className="ml-auto text-xs font-normal text-muted-foreground">
+                        {timeAgo(r.created_at)}
+                      </span>
+                    </div>
+                  </div>
+                ))}
               </div>
             </div>
           </div>

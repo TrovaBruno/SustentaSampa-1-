@@ -1,10 +1,13 @@
 export type ReportPoint = {
+  id: string;
   lat: number;
   lng: number;
   weight: number;
-  created_at?: string;
+  created_at: string;
   cep?: string | null;
   photo_url?: string | null;
+  trafficability?: string | null;
+  water_level?: string | null;
 };
 
 export type Cluster = {
@@ -15,8 +18,10 @@ export type Cluster = {
   weight: number;
   /** CEP predominante da região, quando disponível */
   cep: string | null;
-  /** foto do reporte mais recente da região, quando disponível */
+  /** foto do reporte mais recente da região (usada como miniatura no mapa) */
   photoUrl: string | null;
+  /** todos os reportes dessa região, do mais recente para o mais antigo */
+  reports: ReportPoint[];
   /** true quando 10 ou mais reportes na mesma região → vermelho piscando */
   critical: boolean;
 };
@@ -37,8 +42,7 @@ export function clusterReports(points: ReportPoint[]): Cluster[] {
       count: number;
       weight: number;
       ceps: Map<string, number>;
-      latestCreatedAt: string;
-      latestPhotoUrl: string | null;
+      reports: ReportPoint[];
     }
   >();
   for (const p of points) {
@@ -52,30 +56,32 @@ export function clusterReports(points: ReportPoint[]): Cluster[] {
         count: 0,
         weight: 0,
         ceps: new Map<string, number>(),
-        latestCreatedAt: "",
-        latestPhotoUrl: null,
+        reports: [] as ReportPoint[],
       };
     cur.lat += p.lat;
     cur.lng += p.lng;
     cur.count += 1;
     cur.weight += p.weight;
     if (p.cep) cur.ceps.set(p.cep, (cur.ceps.get(p.cep) ?? 0) + 1);
-    if (p.photo_url && (p.created_at ?? "") >= cur.latestCreatedAt) {
-      cur.latestCreatedAt = p.created_at ?? "";
-      cur.latestPhotoUrl = p.photo_url;
-    }
+    cur.reports.push(p);
     cells.set(key, cur);
   }
-  return Array.from(cells.entries()).map(([key, c]) => ({
-    key,
-    lat: c.lat / c.count,
-    lng: c.lng / c.count,
-    count: c.count,
-    weight: Number((c.weight / c.count).toFixed(2)),
-    cep: Array.from(c.ceps.entries()).sort((a, b) => b[1] - a[1])[0]?.[0] ?? null,
-    photoUrl: c.latestPhotoUrl,
-    critical: c.count >= CRITICAL_CLUSTER_COUNT,
-  }));
+  return Array.from(cells.entries()).map(([key, c]) => {
+    const sortedReports = c.reports
+      .slice()
+      .sort((a, b) => (a.created_at < b.created_at ? 1 : -1));
+    return {
+      key,
+      lat: c.lat / c.count,
+      lng: c.lng / c.count,
+      count: c.count,
+      weight: Number((c.weight / c.count).toFixed(2)),
+      cep: Array.from(c.ceps.entries()).sort((a, b) => b[1] - a[1])[0]?.[0] ?? null,
+      photoUrl: sortedReports.find((r) => r.photo_url)?.photo_url ?? null,
+      reports: sortedReports,
+      critical: c.count >= CRITICAL_CLUSTER_COUNT,
+    };
+  });
 }
 
 /** ISO do instante 24 h atrás — reportes mais antigos somem do mapa. */
