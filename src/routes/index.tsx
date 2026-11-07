@@ -94,6 +94,30 @@ function loadLeaflet(): Promise<any> {
   return w.__leafletReady;
 }
 
+/** Tamanho (em pixels) do pino de uma região, crescendo com o nº de reportes. */
+function pinSize(count: number): number {
+  return Math.min(64, 32 + count * 3);
+}
+
+/** Cria (ou move) o ponto azul "você está aqui". */
+function placeUserDot(L: any, map: any, ref: { current: any }, lat: number, lng: number) {
+  if (ref.current) {
+    ref.current.setLatLng([lat, lng]);
+    return;
+  }
+  ref.current = L.marker([lat, lng], {
+    icon: L.divIcon({
+      className: "user-dot-wrap",
+      html: '<div class="user-dot"></div>',
+      iconSize: [20, 20],
+      iconAnchor: [10, 10],
+    }),
+    interactive: false,
+    keyboard: false,
+    zIndexOffset: 1000,
+  }).addTo(map);
+}
+
 function SustentaSampaGate() {
   const userId = useAuthGate();
   if (!userId) return <LoadingScreen />;
@@ -104,6 +128,8 @@ function SustentaSampa({ userId }: { userId: string }) {
   const mapEl = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<any>(null);
   const layerRef = useRef<any>(null);
+  const userMarkerRef = useRef<any>(null);
+  const [activeRegions, setActiveRegions] = useState<number | null>(null);
   const coordsRef = useRef({ lat: -23.5505, lng: -46.6333 });
   const [coords, setCoords] = useState({ lat: -23.5505, lng: -46.6333 });
   const [risk, setRisk] = useState<ReturnType<typeof riskFromPoints> | null>(null);
@@ -150,6 +176,7 @@ function SustentaSampa({ userId }: { userId: string }) {
     const points = (data ?? []) as ReportPoint[];
     const clusters = clusterReports(points);
     setHotspots(clusters.filter((c) => c.critical).length);
+    setActiveRegions(clusters.length);
     clustersRef.current = clusters;
     setSelectedCluster((prev) => (prev ? (clusters.find((c) => c.key === prev.key) ?? null) : prev));
 
@@ -158,14 +185,18 @@ function SustentaSampa({ userId }: { userId: string }) {
       if (layerRef.current) mapRef.current.removeLayer(layerRef.current);
       const group = L.layerGroup();
       for (const c of clusters) {
-        const color = c.critical ? "#F44336" : "#FF9800";
-        L.circle([c.lat, c.lng], {
-          radius: 260 + Math.min(240, c.count * 20),
-          color,
-          weight: 3,
-          fillColor: color,
-          fillOpacity: c.critical ? 0.45 : 0.3,
-          className: c.critical ? "cluster-critical" : "cluster-warning",
+        const size = pinSize(c.count);
+        L.marker([c.lat, c.lng], {
+          icon: L.divIcon({
+            className: "cluster-icon",
+            html: `<div class="cluster-pin ${
+              c.critical ? "cluster-pin--critical" : "cluster-pin--warn"
+            }" style="width:${size}px;height:${size}px">${c.count}</div>`,
+            iconSize: [size, size],
+            iconAnchor: [size / 2, size / 2],
+          }),
+          title: `${c.count} reporte(s) nesta região`,
+          riseOnHover: true,
         })
           .on("click", () => setSelectedCluster(c))
           .addTo(group);
@@ -193,12 +224,14 @@ function SustentaSampa({ userId }: { userId: string }) {
       if (cancelled || !mapEl.current || mapRef.current) return;
       const map = L.map(mapEl.current, { zoomControl: false }).setView(
         [coordsRef.current.lat, coordsRef.current.lng],
-        15,
+        12,
       );
       L.control.zoom({ position: "topright" }).addTo(map);
+      // Mapa-base: OpenStreetMap com filtro escuro (definido em styles.css).
       L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
         attribution: "&copy; OpenStreetMap contributors",
         maxZoom: 19,
+        className: "tiles-osm-dark",
       }).addTo(map);
       mapRef.current = map;
       refresh();
@@ -210,6 +243,7 @@ function SustentaSampa({ userId }: { userId: string }) {
             const c = { lat: pos.coords.latitude, lng: pos.coords.longitude };
             coordsRef.current = c;
             setCoords(c);
+            placeUserDot(L, map, userMarkerRef, c.lat, c.lng);
             map.setView([c.lat, c.lng], 15);
             refresh();
             resolveCepFromCoords(c.lat, c.lng)
@@ -378,6 +412,36 @@ function SustentaSampa({ userId }: { userId: string }) {
     }
   }
 
+  function locateMe() {
+    const map = mapRef.current;
+    const L = (window as any).L;
+    if (!map || !L) return;
+    if (!navigator.geolocation) {
+      setToast("Seu navegador não permite obter a localização.");
+      setTimeout(() => setToast(null), 3500);
+      return;
+    }
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        const c = { lat: pos.coords.latitude, lng: pos.coords.longitude };
+        coordsRef.current = c;
+        setCoords(c);
+        placeUserDot(L, map, userMarkerRef, c.lat, c.lng);
+        map.setView([c.lat, c.lng], 15);
+        refresh();
+        setCepLoading(true);
+        resolveCepFromCoords(c.lat, c.lng)
+          .then(setCepInfo)
+          .finally(() => setCepLoading(false));
+      },
+      () => {
+        setToast("Não foi possível obter sua localização. Verifique a permissão do navegador.");
+        setTimeout(() => setToast(null), 3500);
+      },
+      { timeout: 8000 },
+    );
+  }
+
   const riskToken = risk ? RISK_TOKEN[risk.level] : "risk-low";
 
   return (
@@ -456,7 +520,21 @@ function SustentaSampa({ userId }: { userId: string }) {
           )}
 
           <div className="relative overflow-hidden rounded-2xl border-4 border-border">
-            <div ref={mapEl} className="h-[52vh] min-h-[320px] w-full" />
+            <div ref={mapEl} className="h-[56vh] min-h-[340px] w-full" />
+            {activeRegions === 0 && (
+              <p className="pointer-events-none absolute left-3 top-3 z-[1000] rounded-xl border-2 border-border bg-background/90 px-3 py-2 text-sm font-bold text-foreground">
+                Nenhum reporte nas últimas 24 h
+              </p>
+            )}
+            <button
+              type="button"
+              onClick={locateMe}
+              aria-label="Centralizar no meu local"
+              title="Centralizar no meu local"
+              className="absolute bottom-3 left-3 z-[1000] flex h-12 w-12 items-center justify-center rounded-full border-4 border-border bg-background text-xl shadow-lg"
+            >
+              📍
+            </button>
           </div>
 
           <div className="flex flex-wrap gap-3 pb-2 text-sm font-bold">

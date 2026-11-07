@@ -98,10 +98,66 @@
   animation: cluster-pulse 1s ease-in-out infinite;
 }
 
-/* Visual escuro para os tiles do OSM (que não têm chave de API) */
-.leaflet-tile {
-  filter: grayscale(1) invert(1) brightness(0.85) contrast(0.9);
+/* Mapa escuro: o OpenStreetMap é invertido e clareado no próprio contêiner da camada.
+   (O Leaflet define "filter: inherit" em .leaflet-tile, então o filtro não pode ir nos tiles.) */
+.tiles-osm-dark {
+  filter: grayscale(1) invert(1) brightness(1.5) contrast(1.2);
 }
 .leaflet-container {
   background: #121212;
+}
+
+/* Pinos de região (número de reportes) */
+.cluster-icon,
+.user-dot-wrap {
+  background: transparent;
+  border: 0;
+}
+.cluster-pin {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 9999px;
+  border: 3px solid rgba(255, 255, 255, 0.92);
+  font-weight: 900;
+  font-size: 14px;
+  line-height: 1;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.55);
+  cursor: pointer;
+}
+.cluster-pin--warn {
+  background: #ff9800;
+  color: #121212;
+}
+.cluster-pin--critical {
+  background: #f44336;
+  color: #fff;
+  animation: pin-pulse 1.4s ease-out infinite;
+}
+@keyframes pin-pulse {
+  0% { box-shadow: 0 0 0 0 rgba(244, 67, 54, 0.6), 0 4px 14px rgba(0, 0, 0, 0.55); }
+  70% { box-shadow: 0 0 0 16px rgba(244, 67, 54, 0), 0 4px 14px rgba(0, 0, 0, 0.55); }
+  100% { box-shadow: 0 0 0 0 rgba(244, 67, 54, 0), 0 4px 14px rgba(0, 0, 0, 0.55); }
+}
+
+/* Ponto "você está aqui" */
+.user-dot {
+  width: 20px;
+  height: 20px;
+  border-radius: 9999px;
+  background: #2196f3;
+  border: 3px solid #fff;
+  animation: user-pulse 2s ease-out infinite;
+}
+@keyframes user-pulse {
+  0% { box-shadow: 0 0 0 0 rgba(33, 150, 243, 0.55); }
+  70% { box-shadow: 0 0 0 14px rgba(33, 150, 243, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(33, 150, 243, 0); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .cluster-pin--critical,
+  .user-dot {
+    animation: none;
+  }
 }
