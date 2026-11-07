@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Monitoramento colaborativo de alagamentos — SustentaSampa</title>
+<meta name="description" content="Aplicativo colaborativo de monitoramento de alagamentos urbanos em São Paulo: reportes com foto, mapa de risco, nível de rios e chat da comunidade.">
+<style>
+:root{color-scheme:dark light;--bg:#121212;--fg:#f2f2f2;--muted:#b8b8b8;--accent:#f6d84a;--card:#1e1e1e;--border:#3a3a3a}
+@media (prefers-color-scheme:light){:root{--bg:#fafafa;--fg:#1a1a1a;--muted:#555;--accent:#7a5b00;--card:#fff;--border:#d8d8d8}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);font:16px/1.65 system-ui,-apple-system,"Segoe UI",Roboto,Arial,sans-serif}
+.wrap{max-width:760px;margin:0 auto;padding:0 20px}
+header.site{padding-top:20px}
+header.site a{color:var(--accent);font-weight:800;font-size:1.25rem;text-decoration:none}
+main{padding-bottom:48px}
+h1{font-size:2rem;line-height:1.2;margin:.7em 0 .3em}
+h2{font-size:1.2rem;margin:2em 0 .5em;color:var(--accent)}
+.muted{color:var(--muted)}
+ul{padding-left:1.2em}
+li{margin:.35em 0}
+a{color:var(--accent)}
+.card{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:14px 18px;margin:20px 0}
+.btn{display:inline-block;background:#f6d84a;color:#121212;font-weight:800;padding:12px 22px;border-radius:12px;text-decoration:none}
+footer{border-top:1px solid var(--border);color:var(--muted);font-size:.9rem;padding-top:16px;padding-bottom:40px}
+footer a{margin-right:16px}
+</style>
+</head>
+<body>
+<header class="site wrap"><a href="/sobre.html">SustentaSampa</a></header>
+<main class="wrap">
+
+<h1>Monitoramento colaborativo de alagamentos urbanos</h1>
+<p class="muted">O SustentaSampa ajuda moradores de São Paulo a saber, em poucos toques, onde há alagamento agora e quais regiões estão em risco.</p>
+<p><a class="btn" href="https://sustenta-sampa-1.vercel.app/">Acessar o aplicativo</a></p>
+
+<h2>O que é</h2>
+<p>O SustentaSampa é um aplicativo colaborativo: os próprios moradores registram ocorrências de alagamento, e o app reúne esses registros em um mapa atualizado em tempo quase real. Ele também combina informações públicas de clima e de nível de rios para dar uma visão mais completa da situação.</p>
+
+<h2>Como funciona</h2>
+<ul>
+<li><strong>Reporte rápido:</strong> em três passos (transitabilidade, nível da água e foto do local), com a localização detectada automaticamente.</li>
+<li><strong>Mapa de risco:</strong> as regiões com reportes recentes aparecem agrupadas, e as que acumulam 10 ou mais reportes em 24 horas são destacadas como críticas.</li>
+<li><strong>Rios próximos:</strong> nível e vazão de estações de monitoramento da Agência Nacional de Águas (ANA), quando a estação está transmitindo.</li>
+<li><strong>Probabilidade de alagamento:</strong> estimativa calculada a partir de dados meteorológicos abertos (Open-Meteo).</li>
+<li><strong>Chat da comunidade</strong> e <strong>botão de SOS</strong>, com ligação direta para a Defesa Civil (199) e o Corpo de Bombeiros (193).</li>
+</ul>
+
+<div class="card"><strong>Importante:</strong> o SustentaSampa não é um serviço oficial de alerta. As informações são colaborativas e estimativas. Em situação de emergência, ligue 199 (Defesa Civil) ou 193 (Bombeiros).</div>
+
+<h2>Sobre o projeto</h2>
+<p>O SustentaSampa é um projeto acadêmico, desenvolvido como Trabalho de Conclusão de Curso (TCC) em Sistemas de Informação, atualmente em fase de MVP (produto mínimo viável).</p>
+
+<h2>Dados e regras de uso</h2>
+<p>Para usar o app é preciso criar uma conta. Explicamos quais dados coletamos e como os usamos na <a href="/privacidade.html">Política de Privacidade</a>, e as regras de uso nos <a href="/termos.html">Termos de Serviço</a>.</p>
+
+</main>
+<footer class="wrap">
+<nav><a href="/sobre.html">Sobre</a><a href="/privacidade.html">Política de Privacidade</a><a href="/termos.html">Termos de Serviço</a></nav>
+<p>Contato: <a href="mailto:brunotrova802@gmail.com">brunotrova802@gmail.com</a></p>
+</footer>
+</body>
+</html>
