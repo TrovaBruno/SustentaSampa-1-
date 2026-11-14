@@ -70,3 +70,7 @@ sustentasampa/
 └── supabase/
     └── migrations/
         └── 0001_schema.sql         # Schema completo do banco de dados
+
+## Integração contínua
+
+A cada push e pull request na `main`, o GitHub Actions roda lint, testes, build e checagem de tipos (`.github/workflows/ci.yml`).
