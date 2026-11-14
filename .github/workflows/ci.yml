@@ -24,15 +24,15 @@ jobs:
       - name: Lint
         run: npm run lint
 
-      - name: Checagem de tipos
-        run: npm run typecheck
-
       - name: Testes
         run: npm test
 
-      - name: Build
+      - name: Build (gera src/routeTree.gen.ts, que não é versionado)
         run: npm run build
         env:
           # valores fictícios: o build não acessa o banco
           VITE_SUPABASE_URL: https://placeholder.supabase.co
           VITE_SUPABASE_PUBLISHABLE_KEY: placeholder
+
+      - name: Checagem de tipos
+        run: npm run typecheck
