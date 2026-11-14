@@ -26,7 +26,13 @@ async function reverseGeocode(lat: number, lng: number) {
   const res = await fetch(url, { headers: { Accept: "application/json" } });
   if (!res.ok) throw new Error("reverse geocode failed");
   return (await res.json()) as {
-    address?: { postcode?: string; suburb?: string; city_district?: string; city?: string; town?: string };
+    address?: {
+      postcode?: string;
+      suburb?: string;
+      city_district?: string;
+      city?: string;
+      town?: string;
+    };
   };
 }
 
@@ -57,7 +63,11 @@ export async function resolveCepFromCoords(lat: number, lng: number): Promise<Ce
       return fallback;
     }
     const bairro =
-      data.address?.suburb ?? data.address?.city_district ?? data.address?.town ?? data.address?.city ?? null;
+      data.address?.suburb ??
+      data.address?.city_district ??
+      data.address?.town ??
+      data.address?.city ??
+      null;
     const centroid = await cepCentroid(cep);
     const result: CepLocation = {
       cep,

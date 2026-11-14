@@ -15,9 +15,9 @@ function ProbGate() {
 
 const RIVER_TOKEN: Record<string, string> = {
   Baixo: "risk-low",
-  "Médio": "risk-mid",
+  Médio: "risk-mid",
   Alto: "risk-critical",
-  "Indisponível": "muted-foreground",
+  Indisponível: "muted-foreground",
 };
 
 function ProbabilidadePage() {
@@ -156,9 +156,16 @@ function floodProbability(env: EnvironmentData) {
   else if (env.river.level === "Médio") score += 12;
   if ((env.windSpeed ?? 0) > 35) score += 5;
   const percent = Math.max(3, Math.min(99, Math.round(score)));
-  const label = percent >= 70 ? "Crítica" : percent >= 45 ? "Alta" : percent >= 20 ? "Média" : "Baixa";
+  const label =
+    percent >= 70 ? "Crítica" : percent >= 45 ? "Alta" : percent >= 20 ? "Média" : "Baixa";
   const token =
-    percent >= 70 ? "risk-critical" : percent >= 45 ? "risk-high" : percent >= 20 ? "risk-mid" : "risk-low";
+    percent >= 70
+      ? "risk-critical"
+      : percent >= 45
+        ? "risk-high"
+        : percent >= 20
+          ? "risk-mid"
+          : "risk-low";
   const reason = [
     env.isRaining ? "Está chovendo agora" : "Sem chuva no momento",
     `rio ${env.river.level.toLowerCase()}`,

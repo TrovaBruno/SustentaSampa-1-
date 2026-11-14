@@ -25,9 +25,9 @@ export const Route = createFileRoute("/")({
 
 const RISK_TOKEN: Record<RiskLevel, string> = {
   Baixo: "risk-low",
-  "Médio": "risk-mid",
+  Médio: "risk-mid",
   Alto: "risk-high",
-  "Crítico": "risk-critical",
+  Crítico: "risk-critical",
 };
 
 const TRAFFIC_LABEL: Record<string, string> = {
@@ -178,7 +178,9 @@ function SustentaSampa({ userId }: { userId: string }) {
     setHotspots(clusters.filter((c) => c.critical).length);
     setActiveRegions(clusters.length);
     clustersRef.current = clusters;
-    setSelectedCluster((prev) => (prev ? (clusters.find((c) => c.key === prev.key) ?? null) : prev));
+    setSelectedCluster((prev) =>
+      prev ? (clusters.find((c) => c.key === prev.key) ?? null) : prev,
+    );
 
     const L = (window as any).L;
     if (L && mapRef.current) {
@@ -400,10 +402,7 @@ function SustentaSampa({ userId }: { userId: string }) {
     const option = AVATAR_CATALOG.find((a) => a.id === id);
     if (!option || !profile || !isAvatarUnlocked(option, profile.points)) return;
     setAvatarSaving(true);
-    const { error } = await supabase
-      .from("profiles")
-      .update({ avatar_color: id })
-      .eq("id", userId);
+    const { error } = await supabase.from("profiles").update({ avatar_color: id }).eq("id", userId);
     setAvatarSaving(false);
     if (!error) {
       setProfile((p) => (p ? { ...p, avatar_color: id } : p));
@@ -653,8 +652,8 @@ function SustentaSampa({ userId }: { userId: string }) {
               </div>
 
               <p className="text-sm text-muted-foreground">
-                Cores desbloqueadas conforme você acumula pontos reportando alagamentos. Você
-                tem {profile?.points ?? 0} pts.
+                Cores desbloqueadas conforme você acumula pontos reportando alagamentos. Você tem{" "}
+                {profile?.points ?? 0} pts.
               </p>
 
               <div className="mt-4 grid grid-cols-2 gap-3">
@@ -815,8 +814,8 @@ function SustentaSampa({ userId }: { userId: string }) {
                 <div className="space-y-3">
                   <p className="text-base font-semibold">3. Foto do local (obrigatória)</p>
                   <p className="text-sm text-muted-foreground">
-                    A foto ajuda a comunidade a confirmar o reporte. Tire uma foto do
-                    alagamento ou envie uma da galeria.
+                    A foto ajuda a comunidade a confirmar o reporte. Tire uma foto do alagamento ou
+                    envie uma da galeria.
                   </p>
 
                   <div className="grid grid-cols-2 gap-2">
@@ -861,9 +860,7 @@ function SustentaSampa({ userId }: { userId: string }) {
                     />
                   )}
 
-                  {photoError && (
-                    <p className="text-sm font-bold text-danger">{photoError}</p>
-                  )}
+                  {photoError && <p className="text-sm font-bold text-danger">{photoError}</p>}
 
                   <p className="text-sm text-muted-foreground">
                     {cepLoading

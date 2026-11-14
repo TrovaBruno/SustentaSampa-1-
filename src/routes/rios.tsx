@@ -137,7 +137,12 @@ function RiosPage() {
     if (error || data?.error) {
       setLevels((prev) => ({
         ...prev,
-        [codigo]: { nivel_m: null, vazao_m3s: null, medido_em: null, error: "Não disponível agora." },
+        [codigo]: {
+          nivel_m: null,
+          vazao_m3s: null,
+          medido_em: null,
+          error: "Não disponível agora.",
+        },
       }));
       return;
     }

@@ -72,6 +72,39 @@ export type Database = {
         };
         Relationships: [];
       };
+      river_stations: {
+        Row: {
+          codigo_estacao: string;
+          lat: number;
+          lng: number;
+          municipio: string | null;
+          nome: string;
+          rio_bacia: string | null;
+          uf: string | null;
+          updated_at: string;
+        };
+        Insert: {
+          codigo_estacao: string;
+          lat: number;
+          lng: number;
+          municipio?: string | null;
+          nome: string;
+          rio_bacia?: string | null;
+          uf?: string | null;
+          updated_at?: string;
+        };
+        Update: {
+          codigo_estacao?: string;
+          lat?: number;
+          lng?: number;
+          municipio?: string | null;
+          nome?: string;
+          rio_bacia?: string | null;
+          uf?: string | null;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
       profiles: {
         Row: {
           avatar_color: string;

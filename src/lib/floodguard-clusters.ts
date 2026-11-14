@@ -46,18 +46,15 @@ export function clusterReports(points: ReportPoint[]): Cluster[] {
     }
   >();
   for (const p of points) {
-    const key = p.cep
-      ? `cep:${p.cep}`
-      : `${Math.round(p.lat / CELL)}:${Math.round(p.lng / CELL)}`;
-    const cur =
-      cells.get(key) ?? {
-        lat: 0,
-        lng: 0,
-        count: 0,
-        weight: 0,
-        ceps: new Map<string, number>(),
-        reports: [] as ReportPoint[],
-      };
+    const key = p.cep ? `cep:${p.cep}` : `${Math.round(p.lat / CELL)}:${Math.round(p.lng / CELL)}`;
+    const cur = cells.get(key) ?? {
+      lat: 0,
+      lng: 0,
+      count: 0,
+      weight: 0,
+      ceps: new Map<string, number>(),
+      reports: [] as ReportPoint[],
+    };
     cur.lat += p.lat;
     cur.lng += p.lng;
     cur.count += 1;
@@ -67,9 +64,7 @@ export function clusterReports(points: ReportPoint[]): Cluster[] {
     cells.set(key, cur);
   }
   return Array.from(cells.entries()).map(([key, c]) => {
-    const sortedReports = c.reports
-      .slice()
-      .sort((a, b) => (a.created_at < b.created_at ? 1 : -1));
+    const sortedReports = c.reports.slice().sort((a, b) => (a.created_at < b.created_at ? 1 : -1));
     return {
       key,
       lat: c.lat / c.count,

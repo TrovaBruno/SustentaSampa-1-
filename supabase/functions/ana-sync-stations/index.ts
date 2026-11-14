@@ -93,7 +93,9 @@ Deno.serve(async (req) => {
       .filter(
         (s) =>
           s["Operando"] === "1" &&
-          String(s["Tipo_Estacao"] ?? "").toLowerCase().includes("fluvio") &&
+          String(s["Tipo_Estacao"] ?? "")
+            .toLowerCase()
+            .includes("fluvio") &&
           !!s["Data_Periodo_Telemetrica_Inicio"] &&
           s["Latitude"] &&
           s["Longitude"],
