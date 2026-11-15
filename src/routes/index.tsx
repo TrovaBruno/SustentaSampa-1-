@@ -17,6 +17,7 @@ import {
   type WaterLevel,
 } from "@/lib/floodguard-geo";
 import { resolveCepFromCoords, type CepLocation } from "@/lib/cep";
+import { REPORT_LIMIT, formatCountdown, reportLimitStatus } from "@/lib/report-limit";
 import { AVATAR_CATALOG, avatarColorFor, isAvatarUnlocked } from "@/lib/avatars";
 
 export const Route = createFileRoute("/")({
@@ -168,6 +169,9 @@ function SustentaSampa({ userId }: { userId: string }) {
   } | null>(null);
   const [toast, setToast] = useState<string | null>(null);
   const [sending, setSending] = useState(false);
+  const [limitUntil, setLimitUntil] = useState<number | null>(null);
+  const [reportsLeft, setReportsLeft] = useState<number | null>(null);
+  const [nowMs, setNowMs] = useState(() => Date.now());
   const [cepInfo, setCepInfo] = useState<CepLocation | null>(null);
   const [cepLoading, setCepLoading] = useState(false);
   const [photoFile, setPhotoFile] = useState<File | null>(null);
@@ -270,6 +274,45 @@ function SustentaSampa({ userId }: { userId: string }) {
     if (data) setProfile(data);
   }, [userId]);
 
+  /** Consulta os reportes do próprio usuário na última hora e calcula o limite. */
+  const checkLimit = useCallback(async () => {
+    const since = new Date(Date.now() - 60 * 60 * 1000).toISOString();
+    const { data } = await supabase
+      .from("flood_reports")
+      .select("created_at")
+      .eq("user_id", userId)
+      .gte("created_at", since);
+    if (!data) return;
+    const status = reportLimitStatus(
+      data.map((r) => r.created_at),
+      Date.now(),
+    );
+    setReportsLeft(status.left);
+    setLimitUntil(status.blockedUntil);
+  }, [userId]);
+
+  useEffect(() => {
+    void checkLimit();
+  }, [checkLimit]);
+
+  // contagem regressiva: atualiza a cada segundo e libera sozinho no fim
+  useEffect(() => {
+    if (limitUntil === null) return;
+    setNowMs(Date.now());
+    const id = setInterval(() => {
+      const n = Date.now();
+      setNowMs(n);
+      if (n >= limitUntil) {
+        setLimitUntil(null);
+        void checkLimit();
+      }
+    }, 1000);
+    return () => clearInterval(id);
+  }, [limitUntil, checkLimit]);
+
+  const limited = limitUntil !== null && nowMs < limitUntil;
+  const remainingMs = limitUntil !== null ? Math.max(0, limitUntil - nowMs) : 0;
+
   useEffect(() => {
     let cancelled = false;
     loadProfile();
@@ -362,6 +405,7 @@ function SustentaSampa({ userId }: { userId: string }) {
       setPhotoError("A foto é obrigatória para enviar o reporte.");
       return;
     }
+    if (limitUntil !== null && Date.now() < limitUntil) return;
     setSending(true);
     try {
       const compressed = await compressPhoto(photoFile);
@@ -391,14 +435,18 @@ function SustentaSampa({ userId }: { userId: string }) {
       setToast("Reporte enviado! +10 pontos");
       setModal(false);
       resetReportForm();
-      await Promise.all([refresh(), loadProfile()]);
+      await Promise.all([refresh(), loadProfile(), checkLimit()]);
     } catch (err) {
-      const message = err instanceof Error ? err.message : "";
-      setToast(
-        message.includes("RATE_LIMIT_EXCEEDED")
-          ? "Você já enviou 3 reportes na última hora. Aguarde um pouco antes de enviar outro."
-          : "Não foi possível enviar o reporte. Tente novamente.",
-      );
+      const message =
+        err && typeof err === "object" && "message" in err
+          ? String((err as { message: unknown }).message)
+          : "";
+      if (message.includes("RATE_LIMIT_EXCEEDED")) {
+        await checkLimit();
+        setToast("Limite de reportes atingido. Veja o tempo restante para reportar de novo.");
+      } else {
+        setToast("Não foi possível enviar o reporte. Tente novamente.");
+      }
     } finally {
       setSending(false);
     }
@@ -616,13 +664,15 @@ function SustentaSampa({ userId }: { userId: string }) {
         <button
           type="button"
           onClick={() => setModal(true)}
-          className="fixed bottom-24 right-4 z-[1550] min-h-[64px] rounded-2xl bg-danger px-6 text-lg font-black uppercase text-foreground shadow-2xl"
+          className={`fixed bottom-24 right-4 z-[1550] min-h-[64px] rounded-2xl px-6 text-lg font-black uppercase shadow-2xl ${
+            limited ? "border-4 border-danger bg-card text-danger" : "bg-danger text-foreground"
+          }`}
         >
-          + Reportar Alagamento
+          {limited ? `Próximo reporte em ${formatCountdown(remainingMs)}` : "+ Reportar Alagamento"}
         </button>
 
         {toast && (
-          <div className="fixed bottom-44 left-1/2 z-[1700] w-[90%] max-w-sm -translate-x-1/2 rounded-xl border-2 border-accent bg-card p-4 text-center text-base font-bold text-accent">
+          <div className="fixed bottom-44 left-1/2 z-[1900] w-[90%] max-w-sm -translate-x-1/2 rounded-xl border-2 border-accent bg-card p-4 text-center text-base font-bold text-accent">
             {toast}
           </div>
         )}
@@ -814,7 +864,27 @@ function SustentaSampa({ userId }: { userId: string }) {
                 </button>
               </div>
 
-              {step === 1 && (
+              {limited ? (
+                <div role="alert" className="mb-2 rounded-2xl border-4 border-danger p-4">
+                  <p className="text-lg font-black text-danger">Limite de reportes atingido</p>
+                  <p className="mt-1 text-sm font-medium">
+                    Você já enviou {REPORT_LIMIT} reportes na última hora. O limite evita spam e
+                    mantém o mapa confiável.
+                  </p>
+                  <p className="mt-3 text-4xl font-black tabular-nums text-foreground">
+                    {formatCountdown(remainingMs)}
+                  </p>
+                  <p className="text-sm text-muted-foreground">até poder reportar de novo</p>
+                </div>
+              ) : (
+                reportsLeft !== null && (
+                  <p className="mb-3 text-sm text-muted-foreground">
+                    Reportes restantes nesta hora: {reportsLeft} de {REPORT_LIMIT}
+                  </p>
+                )
+              )}
+
+              {!limited && step === 1 && (
                 <div className="space-y-3">
                   <p className="text-base font-semibold">1. Transitabilidade</p>
                   {(
@@ -840,7 +910,7 @@ function SustentaSampa({ userId }: { userId: string }) {
                 </div>
               )}
 
-              {step === 2 && (
+              {!limited && step === 2 && (
                 <div className="space-y-3">
                   <p className="text-base font-semibold">2. Nível da água</p>
                   {(
@@ -866,7 +936,7 @@ function SustentaSampa({ userId }: { userId: string }) {
                 </div>
               )}
 
-              {step === 3 && (
+              {!limited && step === 3 && (
                 <div className="space-y-3">
                   <p className="text-base font-semibold">3. Foto do local (obrigatória)</p>
                   <p className="text-sm text-muted-foreground">
@@ -937,7 +1007,7 @@ function SustentaSampa({ userId }: { userId: string }) {
                 </div>
               )}
 
-              {step > 1 && (
+              {!limited && step > 1 && (
                 <button
                   type="button"
                   onClick={() => setStep((s) => s - 1)}
