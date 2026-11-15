@@ -125,6 +125,9 @@
   box-shadow: 0 4px 14px rgba(0, 0, 0, 0.55);
   cursor: pointer;
 }
+.heat-hit {
+  cursor: pointer;
+}
 .cluster-pin--warn {
   background: #ff9800;
   color: #121212;
