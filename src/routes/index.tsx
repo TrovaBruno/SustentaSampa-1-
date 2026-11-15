@@ -87,16 +87,36 @@ function loadLeaflet(): Promise<any> {
     document.head.appendChild(css);
     const s = document.createElement("script");
     s.src = "https://unpkg.com/leaflet@1.9.4/dist/leaflet.js";
-    s.onload = () => resolve(w.L);
+    s.onload = () => {
+      // Plugin do mapa de calor; se falhar, o mapa ainda funciona (com círculos simples).
+      const heat = document.createElement("script");
+      heat.src = "https://unpkg.com/leaflet.heat@0.2.0/dist/leaflet-heat.js";
+      heat.onload = () => resolve(w.L);
+      heat.onerror = () => resolve(w.L);
+      document.body.appendChild(heat);
+    };
     s.onerror = reject;
     document.body.appendChild(s);
   });
   return w.__leafletReady;
 }
 
-/** Tamanho (em pixels) do pino de uma região, crescendo com o nº de reportes. */
-function pinSize(count: number): number {
-  return Math.min(64, 32 + count * 3);
+/**
+ * Configuração do mapa de calor. O raio é fixado em ~150 m no chão (e não em pixels),
+ * então a mancha acompanha o zoom. Cada reporte soma calor: poucos = amarelo/laranja,
+ * muitos na mesma região = vermelho escuro.
+ */
+function heatOptions(zoom: number, lat: number) {
+  const metersPerPx = (156543.03392 * Math.cos((lat * Math.PI) / 180)) / 2 ** zoom;
+  const radius = Math.max(14, Math.min(70, 150 / metersPerPx));
+  return {
+    radius,
+    blur: radius * 0.8,
+    maxZoom: 13,
+    max: 4,
+    minOpacity: 0.3,
+    gradient: { 0.2: "#ffe082", 0.45: "#ffb300", 0.7: "#f4511e", 1: "#b71c1c" },
+  };
 }
 
 /** Cria (ou move) o ponto azul "você está aqui". */
@@ -128,6 +148,7 @@ function SustentaSampa({ userId }: { userId: string }) {
   const mapEl = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<any>(null);
   const layerRef = useRef<any>(null);
+  const heatRef = useRef<any>(null);
   const userMarkerRef = useRef<any>(null);
   const [activeRegions, setActiveRegions] = useState<number | null>(null);
   const coordsRef = useRef({ lat: -23.5505, lng: -46.6333 });
@@ -184,26 +205,56 @@ function SustentaSampa({ userId }: { userId: string }) {
 
     const L = (window as any).L;
     if (L && mapRef.current) {
-      if (layerRef.current) mapRef.current.removeLayer(layerRef.current);
+      const map = mapRef.current;
+      if (layerRef.current) map.removeLayer(layerRef.current);
       const group = L.layerGroup();
+      heatRef.current = null;
+
+      if (L.heatLayer) {
+        const heat = L.heatLayer(
+          points.map((p) => [p.lat, p.lng, p.weight]),
+          heatOptions(map.getZoom(), map.getCenter().lat),
+        );
+        heat.addTo(group);
+        heatRef.current = heat;
+      } else {
+        for (const c of clusters) {
+          L.circle([c.lat, c.lng], {
+            radius: 200,
+            stroke: false,
+            fillColor: c.critical ? "#f44336" : "#ff9800",
+            fillOpacity: 0.35,
+            interactive: false,
+          }).addTo(group);
+        }
+      }
+
+      // Alvos de toque: o calor não é clicável, então cada região ganha um alvo
+      // (invisível, ou um ponto vermelho piscando quando crítica) que abre a galeria.
       for (const c of clusters) {
-        const size = pinSize(c.count);
-        L.marker([c.lat, c.lng], {
-          icon: L.divIcon({
-            className: "cluster-icon",
-            html: `<div class="cluster-pin ${
-              c.critical ? "cluster-pin--critical" : "cluster-pin--warn"
-            }" style="width:${size}px;height:${size}px">${c.count}</div>`,
-            iconSize: [size, size],
-            iconAnchor: [size / 2, size / 2],
-          }),
-          title: `${c.count} reporte(s) nesta região`,
-          riseOnHover: true,
-        })
+        const hit = c.critical
+          ? L.marker([c.lat, c.lng], {
+              icon: L.divIcon({
+                className: "cluster-icon",
+                html: '<div class="cluster-pin cluster-pin--critical" style="width:26px;height:26px"></div>',
+                iconSize: [26, 26],
+                iconAnchor: [13, 13],
+              }),
+            })
+          : L.circleMarker([c.lat, c.lng], {
+              radius: 22,
+              stroke: false,
+              fillColor: "#000",
+              fillOpacity: 0.001,
+              className: "heat-hit",
+            });
+        hit
+          .bindTooltip(`${c.count} reporte(s) nesta região`)
           .on("click", () => setSelectedCluster(c))
           .addTo(group);
       }
-      group.addTo(mapRef.current);
+
+      group.addTo(map);
       layerRef.current = group;
     }
     const radiusKm = emergencyRef.current ? 2.5 : 1;
@@ -236,6 +287,9 @@ function SustentaSampa({ userId }: { userId: string }) {
         className: "tiles-osm-dark",
       }).addTo(map);
       mapRef.current = map;
+      map.on("zoomend", () => {
+        heatRef.current?.setOptions(heatOptions(map.getZoom(), map.getCenter().lat));
+      });
       refresh();
 
       if (navigator.geolocation) {
@@ -257,7 +311,7 @@ function SustentaSampa({ userId }: { userId: string }) {
               });
           },
           () => setCepLoading(false),
-          { timeout: 8000 },
+          { timeout: 10000, enableHighAccuracy: true },
         );
       }
     });
@@ -323,8 +377,9 @@ function SustentaSampa({ userId }: { userId: string }) {
 
       const { error } = await supabase.from("flood_reports").insert({
         user_id: userId,
-        lat: cepInfo?.lat ?? coords.lat,
-        lng: cepInfo?.lng ?? coords.lng,
+        // posição real do aparelho; o CEP só serve para agrupar por região
+        lat: coords.lat,
+        lng: coords.lng,
         cep: cepInfo?.cep ?? null,
         trafficability: traffic,
         water_level: water,
@@ -372,8 +427,8 @@ function SustentaSampa({ userId }: { userId: string }) {
   }
 
   function locationText() {
-    const lat = (cepInfo?.lat ?? coords.lat).toFixed(5);
-    const lng = (cepInfo?.lng ?? coords.lng).toFixed(5);
+    const lat = coords.lat.toFixed(5);
+    const lng = coords.lng.toFixed(5);
     const cepPart = cepInfo?.cep ? ` · CEP ${cepInfo.cep}` : "";
     const labelPart = cepInfo?.label ? ` · ${cepInfo.label}` : "";
     return `Minha localização: ${lat}, ${lng}${cepPart}${labelPart} — https://www.google.com/maps?q=${lat},${lng}`;
@@ -437,7 +492,7 @@ function SustentaSampa({ userId }: { userId: string }) {
         setToast("Não foi possível obter sua localização. Verifique a permissão do navegador.");
         setTimeout(() => setToast(null), 3500);
       },
-      { timeout: 8000 },
+      { timeout: 10000, enableHighAccuracy: true },
     );
   }
 
@@ -538,12 +593,13 @@ function SustentaSampa({ userId }: { userId: string }) {
 
           <div className="flex flex-wrap gap-3 pb-2 text-sm font-bold">
             <span className="flex items-center gap-2">
+              Menos
               <span
                 aria-hidden
-                className="inline-block h-4 w-4 rounded-full"
-                style={{ background: "#FF9800" }}
+                className="inline-block h-3 w-24 rounded-full"
+                style={{ background: "linear-gradient(90deg,#ffe082,#ffb300,#f4511e,#b71c1c)" }}
               />
-              Menos de {CRITICAL_CLUSTER_COUNT} reportes
+              Mais reportes
             </span>
             <span className="flex items-center gap-2">
               <span
