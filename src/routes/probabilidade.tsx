@@ -1,7 +1,8 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { LoadingScreen, Page, PageHeader, useAuthGate } from "@/components/AppShell";
 import { fetchEnvironment, windDirectionLabel, type EnvironmentData } from "@/lib/weather";
+import { floodProbability } from "@/lib/flood-probability";
 
 export const Route = createFileRoute("/probabilidade")({
   component: ProbGate,
@@ -20,37 +21,57 @@ const RIVER_TOKEN: Record<string, string> = {
   Indisponível: "muted-foreground",
 };
 
+const DEFAULT_COORDS = { lat: -23.5505, lng: -46.6333 };
+const REFRESH_MS = 10 * 60 * 1000;
+
+const mm = (v: number | null | undefined) => (v == null ? "—" : `${v} mm`);
+
 function ProbabilidadePage() {
   const [env, setEnv] = useState<EnvironmentData | null>(null);
   const [error, setError] = useState(false);
-  const [coords, setCoords] = useState({ lat: -23.5505, lng: -46.6333 });
+  const [coords, setCoords] = useState<{ lat: number; lng: number } | null>(null);
+  const [usingDefault, setUsingDefault] = useState(false);
+  const [updatedAt, setUpdatedAt] = useState<Date | null>(null);
+  const [refreshing, setRefreshing] = useState(false);
 
+  // 1) descobre a localização (ou cai no centro de São Paulo, avisando o usuário)
   useEffect(() => {
-    let active = true;
-    function load(lat: number, lng: number) {
-      fetchEnvironment(lat, lng)
-        .then((d) => active && setEnv(d))
-        .catch(() => active && setError(true));
+    if (!navigator.geolocation) {
+      setCoords(DEFAULT_COORDS);
+      setUsingDefault(true);
+      return;
     }
-    if (navigator.geolocation) {
-      navigator.geolocation.getCurrentPosition(
-        (pos) => {
-          const c = { lat: pos.coords.latitude, lng: pos.coords.longitude };
-          if (!active) return;
-          setCoords(c);
-          load(c.lat, c.lng);
-        },
-        () => load(coords.lat, coords.lng),
-        { timeout: 8000 },
-      );
-    } else {
-      load(coords.lat, coords.lng);
-    }
-    return () => {
-      active = false;
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    navigator.geolocation.getCurrentPosition(
+      (pos) => setCoords({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
+      () => {
+        setCoords(DEFAULT_COORDS);
+        setUsingDefault(true);
+      },
+      { timeout: 8000 },
+    );
   }, []);
+
+  const load = useCallback(async () => {
+    if (!coords) return;
+    setRefreshing(true);
+    try {
+      setEnv(await fetchEnvironment(coords.lat, coords.lng));
+      setUpdatedAt(new Date());
+      setError(false);
+    } catch {
+      setError(true);
+    } finally {
+      setRefreshing(false);
+    }
+  }, [coords]);
+
+  // 2) carrega e recarrega a cada 10 minutos
+  useEffect(() => {
+    if (!coords) return;
+    void load();
+    const id = setInterval(() => void load(), REFRESH_MS);
+    return () => clearInterval(id);
+  }, [coords, load]);
 
   const prob = env ? floodProbability(env) : null;
 
@@ -58,15 +79,44 @@ function ProbabilidadePage() {
     <Page>
       <PageHeader
         title="Probabilidade"
-        subtitle={`Monitoramento em ${coords.lat.toFixed(3)}, ${coords.lng.toFixed(3)}`}
+        subtitle={
+          coords
+            ? `Monitoramento em ${coords.lat.toFixed(3)}, ${coords.lng.toFixed(3)}`
+            : "Obtendo sua localização..."
+        }
       />
 
       <div className="space-y-4 px-4">
+        {usingDefault && (
+          <p className="rounded-2xl border-4 border-risk-mid p-3 text-sm font-bold">
+            Localização não autorizada: usando o centro de São Paulo. Libere a localização para
+            dados do seu entorno.
+          </p>
+        )}
+
         {error && (
           <p className="rounded-2xl border-4 border-danger p-4 text-base font-bold">
             Não foi possível consultar os dados meteorológicos agora.
+            {env ? " Os valores abaixo são da última atualização." : ""}
           </p>
         )}
+
+        <div className="flex items-center justify-between gap-3 text-sm text-muted-foreground">
+          <span>
+            {updatedAt
+              ? `Atualizado às ${updatedAt.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}`
+              : "Carregando..."}{" "}
+            · a cada 10 min
+          </span>
+          <button
+            type="button"
+            onClick={() => void load()}
+            disabled={refreshing || !coords}
+            className="min-h-[40px] rounded-xl border-2 border-border px-3 font-bold text-foreground disabled:opacity-60"
+          >
+            {refreshing ? "Atualizando..." : "Atualizar"}
+          </button>
+        </div>
 
         {prob && (
           <section
@@ -93,7 +143,17 @@ function ProbabilidadePage() {
           <Metric
             label="Chance de chuva"
             value={env?.rainProbability != null ? `${env.rainProbability}%` : "—"}
-            hint="Próxima hora"
+            hint="Máxima nas próximas 3 h"
+          />
+          <Metric
+            label="Previsão 3 h"
+            value={env ? mm(env.rainNext3h) : "..."}
+            hint={env?.peakNext3h != null ? `Pico de ${env.peakNext3h} mm/h` : ""}
+          />
+          <Metric
+            label="Acumulado 24 h"
+            value={env ? mm(env.rain24h) : "..."}
+            hint="Chuva nas últimas 24 horas"
           />
           <Metric
             label="Temperatura"
@@ -129,6 +189,7 @@ function ProbabilidadePage() {
 
         <p className="pb-4 text-xs text-muted-foreground">
           Fontes abertas: Open-Meteo (previsão) e Open-Meteo Flood / GloFAS (vazão de rios).
+          Estimativa de risco baseada em modelos; não substitui os alertas oficiais da Defesa Civil.
         </p>
       </div>
     </Page>
@@ -145,31 +206,4 @@ function Metric({ label, value, hint }: { label: string; value: string; hint?: s
       {hint && <p className="mt-1 text-xs text-muted-foreground">{hint}</p>}
     </div>
   );
-}
-
-function floodProbability(env: EnvironmentData) {
-  let score = 0;
-  if (env.isRaining) score += 30;
-  score += Math.min(25, (env.precipitation ?? 0) * 10);
-  score += Math.min(20, (env.rainProbability ?? 0) * 0.2);
-  if (env.river.level === "Alto") score += 30;
-  else if (env.river.level === "Médio") score += 12;
-  if ((env.windSpeed ?? 0) > 35) score += 5;
-  const percent = Math.max(3, Math.min(99, Math.round(score)));
-  const label =
-    percent >= 70 ? "Crítica" : percent >= 45 ? "Alta" : percent >= 20 ? "Média" : "Baixa";
-  const token =
-    percent >= 70
-      ? "risk-critical"
-      : percent >= 45
-        ? "risk-high"
-        : percent >= 20
-          ? "risk-mid"
-          : "risk-low";
-  const reason = [
-    env.isRaining ? "Está chovendo agora" : "Sem chuva no momento",
-    `rio ${env.river.level.toLowerCase()}`,
-    `vento ${env.windSpeed ?? 0} km/h`,
-  ].join(" · ");
-  return { percent, label, token, reason };
 }
