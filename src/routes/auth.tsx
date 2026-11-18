@@ -1,6 +1,7 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import { translateAuthError } from "@/lib/auth-errors";
 
 export const Route = createFileRoute("/auth")({
   component: AuthPage,
@@ -125,7 +126,7 @@ function AuthPage() {
         if (error) throw error;
       }
     } catch (err) {
-      setMsg(err instanceof Error ? err.message : "Falha na autenticação");
+      setMsg(translateAuthError(err));
     } finally {
       setBusy(false);
     }
@@ -142,7 +143,7 @@ function AuthPage() {
       if (error) throw error;
       setResetSent(true);
     } catch (err) {
-      setMsg(err instanceof Error ? err.message : "Não foi possível enviar o link.");
+      setMsg(translateAuthError(err, "Não foi possível enviar o link."));
     } finally {
       setBusy(false);
     }
