@@ -16,6 +16,13 @@ import {
   type Trafficability,
   type WaterLevel,
 } from "@/lib/floodguard-geo";
+import {
+  INITIAL_PROXIMITY_STATE,
+  PROXIMITY,
+  countNearbyRecent,
+  evaluateProximity,
+  type ProximityState,
+} from "@/lib/proximity-alert";
 import { resolveCepFromCoords, type CepLocation } from "@/lib/cep";
 import { REPORT_LIMIT, formatCountdown, reportLimitStatus } from "@/lib/report-limit";
 import { AVATAR_CATALOG, avatarColorFor, isAvatarUnlocked } from "@/lib/avatars";
@@ -185,10 +192,42 @@ function SustentaSampa({ userId }: { userId: string }) {
   const clustersRef = useRef<Cluster[]>([]);
   const [selectedCluster, setSelectedCluster] = useState<Cluster | null>(null);
   const emergencyRef = useRef(false);
+  const pointsRef = useRef<ReportPoint[]>([]);
+  const proximityRef = useRef<ProximityState>(INITIAL_PROXIMITY_STATE);
+  const [proximityAlert, setProximityAlert] = useState<number | null>(null);
 
   useEffect(() => {
     emergencyRef.current = emergency;
   }, [emergency]);
+
+  // Alerta de proximidade: acompanha a posição e avisa ao entrar numa área com muitos reportes.
+  useEffect(() => {
+    if (typeof navigator === "undefined" || !navigator.geolocation) return;
+    const check = (lat: number, lng: number) => {
+      const now = Date.now();
+      const count = countNearbyRecent(pointsRef.current, lat, lng, now);
+      const r = evaluateProximity(proximityRef.current, count, now);
+      proximityRef.current = r.state;
+      if (!r.alert) return;
+      setProximityAlert(count);
+      try {
+        navigator.vibrate?.([200, 100, 200]);
+        if ("Notification" in window && Notification.permission === "granted") {
+          new Notification("Cuidado: área com alagamentos", {
+            body: `${count} reportes na última hora num raio de ${PROXIMITY.radiusKm * 1000} m.`,
+          });
+        }
+      } catch {
+        /* notificação do sistema é opcional */
+      }
+    };
+    const id = navigator.geolocation.watchPosition(
+      (pos) => check(pos.coords.latitude, pos.coords.longitude),
+      () => {},
+      { enableHighAccuracy: true, maximumAge: 15000 },
+    );
+    return () => navigator.geolocation.clearWatch(id);
+  }, []);
 
   const refresh = useCallback(async () => {
     const { data } = await supabase
@@ -199,6 +238,7 @@ function SustentaSampa({ userId }: { userId: string }) {
       .order("created_at", { ascending: false })
       .limit(2000);
     const points = (data ?? []) as ReportPoint[];
+    pointsRef.current = points;
     const clusters = clusterReports(points);
     setHotspots(clusters.filter((c) => c.critical).length);
     setActiveRegions(clusters.length);
@@ -670,6 +710,26 @@ function SustentaSampa({ userId }: { userId: string }) {
         >
           {limited ? `Próximo reporte em ${formatCountdown(remainingMs)}` : "+ Reportar Alagamento"}
         </button>
+
+        {proximityAlert !== null && (
+          <div
+            role="alert"
+            className="fixed left-1/2 top-4 z-[1950] w-[92%] max-w-sm -translate-x-1/2 rounded-xl border-2 border-danger bg-card p-4 text-base font-bold text-danger"
+          >
+            <div className="mb-1 text-lg font-black">Cuidado: área com alagamentos</div>
+            <div className="text-foreground">
+              {proximityAlert} reportes na última hora num raio de {PROXIMITY.radiusKm * 1000} m de
+              você. Evite a região e redobre a atenção.
+            </div>
+            <button
+              type="button"
+              onClick={() => setProximityAlert(null)}
+              className="mt-3 min-h-[44px] w-full rounded-lg bg-danger px-3 text-foreground"
+            >
+              Entendi
+            </button>
+          </div>
+        )}
 
         {toast && (
           <div className="fixed bottom-44 left-1/2 z-[1900] w-[90%] max-w-sm -translate-x-1/2 rounded-xl border-2 border-accent bg-card p-4 text-center text-base font-bold text-accent">
