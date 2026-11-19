@@ -34,13 +34,14 @@ const TABS = [
   { to: "/rios", label: "Rios", icon: "🌊" },
   { to: "/chat", label: "Chat", icon: "💬" },
   { to: "/probabilidade", label: "Probabilidade", icon: "🌧️" },
+  { to: "/relatorio", label: "Relatório", icon: "📄" },
 ] as const;
 
 export function BottomNav() {
   return (
     <nav
       aria-label="Navegação principal"
-      className="fixed bottom-0 left-0 right-0 z-[1600] grid grid-cols-4 border-t-4 border-border bg-background"
+      className="fixed bottom-0 left-0 right-0 z-[1600] grid grid-cols-5 border-t-4 border-border bg-background"
     >
       {TABS.map((t) => (
         <Link
