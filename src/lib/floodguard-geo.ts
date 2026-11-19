@@ -38,9 +38,14 @@ export function riskFromPoints(
 ) {
   const nearby = points.filter((p) => haversineKm(lat, lng, p.lat, p.lng) <= radiusKm);
   const score = nearby.reduce((acc, p) => acc + p.weight, 0);
-  let level: RiskLevel = "Baixo";
-  if (score >= 3.5) level = "Crítico";
-  else if (score >= 2) level = "Alto";
-  else if (score >= 0.8) level = "Médio";
+  const level = riskLevelFromScore(score);
   return { level, score: Number(score.toFixed(2)), reportsNearby: nearby.length, radiusKm };
+}
+
+/** Converte a soma dos pesos dos reportes em nível de risco. */
+export function riskLevelFromScore(score: number): RiskLevel {
+  if (score >= 3.5) return "Crítico";
+  if (score >= 2) return "Alto";
+  if (score >= 0.8) return "Médio";
+  return "Baixo";
 }
